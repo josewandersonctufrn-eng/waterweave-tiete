@@ -12,6 +12,7 @@ import streamlit as st
 
 from waterweave.config import TRECHOS
 from waterweave.reports.narrative_generator import gerar_relatorio_trecho
+from waterweave.reports.pdf_generator import gerar_relatorio_completo_pdf, gerar_relatorio_trecho_pdf
 from waterweave.webapp import theme
 from waterweave.webapp.data_loader import load_qualidade_historica
 
@@ -35,8 +36,22 @@ relatorio = gerar_relatorio_trecho(qualidade, trecho_id, ano)
 with st.container(border=True):
     st.markdown(relatorio)
 
+st.download_button(
+    "📄 Baixar este relatório em PDF",
+    data=gerar_relatorio_trecho_pdf(qualidade, trecho_id, ano),
+    file_name=f"relatorio_{trecho_id}_{ano}.pdf",
+    mime="application/pdf",
+)
+
 st.divider()
 st.subheader("Gerar para todos os trechos neste ano")
 for outro_trecho in TRECHOS:
     with st.expander(theme.TRECHO_LABEL[outro_trecho], expanded=False):
         st.markdown(gerar_relatorio_trecho(qualidade, outro_trecho, ano))
+
+st.download_button(
+    "📄 Baixar relatório de todos os trechos em PDF",
+    data=gerar_relatorio_completo_pdf(qualidade, ano),
+    file_name=f"relatorio_completo_{ano}.pdf",
+    mime="application/pdf",
+)

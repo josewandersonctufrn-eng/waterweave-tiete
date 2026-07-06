@@ -24,6 +24,7 @@ streamlit>=1.37
 plotly>=5.22
 folium>=0.17
 streamlit-folium>=0.23
+fpdf2>=2.8  # export em PDF do Relatório Automático (pure-Python, sem binário de sistema)
 
 # As dependências abaixo são só para desenvolvimento LOCAL (orquestração e
 # conector futuro do MapBiomas) — deliberadamente fora deste arquivo para
