@@ -28,6 +28,17 @@ st.set_page_config(page_title="WaterWeave-Tietê", page_icon="💧", layout="wid
 theme.inject_style()
 theme.render_sidebar_brand()
 
+with st.sidebar:
+    st.markdown("#### Menu de Navegação")
+    st.markdown(
+        """
+        - **Mapa Interativo** — estações de monitoramento georreferenciadas, nascente → foz.
+        - **Séries Históricas** — vazão, chuva e qualidade da água, 1940-2025.
+        - **Comparativo de Cenários** — Atual vs. Alta Restrição de Outorga vs. Mudança Climática Extrema.
+        - **Relatório Automático** — análise textual sintética por trecho e ano.
+        """
+    )
+
 st.title("WaterWeave-Tietê")
 st.caption(
     "Gestão sustentável de recursos hídricos do Rio Tietê — Salesópolis (nascente) "
@@ -63,14 +74,3 @@ for coluna, trecho_id in zip(colunas, TRECHOS):
         st.metric("OD (mg/L)", f"{od:.2f}")
         st.metric("DBO (mg/L)", f"{dbo:.2f}")
         st.markdown(f"{status['icon']} **{status['label']}** · {n_estacoes} estações monitoradas")
-
-st.divider()
-st.markdown(
-    """
-    ### Navegue pelas páginas (menu à esquerda)
-    - **Mapa Interativo** — estações de monitoramento georreferenciadas, nascente → foz.
-    - **Séries Históricas** — vazão, chuva e qualidade da água, 1940-2025.
-    - **Comparativo de Cenários** — Atual vs. Alta Restrição de Outorga vs. Mudança Climática Extrema.
-    - **Relatório Automático** — análise textual sintética por trecho e ano.
-    """
-)
