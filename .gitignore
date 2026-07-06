@@ -1,0 +1,28 @@
+# Fontes brutas locais (grandes, ~150MB) — não precisam ir para o repositório;
+# o dashboard hospedado lê apenas data/silver e data/gold (pequenas, versionadas).
+ALTO TIETE_FLUV/
+ALTO TIETE_PLUV/
+MEDIO TIETE_FLUV/
+MEDIO TIETE_PLUV/
+BAIXO TIETE_FLUV/
+BAIXO TIETE_PLUV/
+base_de_dados_pontos.xlsx
+cod_latlong.xlsx
+Planilha_Historica_Solo_Sedimentos_Rio_Tiete_1940_2025.xlsx
+Sensoriamento_Remoto_Rio_Tiete.xlsx
+
+# Bronze é reprocessável a partir das fontes brutas acima — não precisa ir
+# para o repositório (silver/gold, que o dashboard consome, ficam versionados).
+data/bronze/
+data/_pipeline_runs.json
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+
+# Logs e artefatos locais
+streamlit_log.txt
+*.log

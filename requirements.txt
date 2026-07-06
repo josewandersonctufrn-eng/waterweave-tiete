@@ -1,0 +1,30 @@
+# Instala o pacote `waterweave` (src/) em modo editável — necessário para que
+# `import waterweave...` funcione sem depender de configurar PYTHONPATH
+# manualmente, tanto localmente quanto no Streamlit Community Cloud.
+-e .
+
+# Dados e Delta Lake (deltalake = bindings Python do delta-rs, sem JVM;
+# troque por pyspark + delta-spark se migrar para processamento distribuído —
+# mesmo formato de tabela, sem precisar reprocessar o histórico)
+pandas>=2.2
+deltalake>=1.0
+openpyxl>=3.1
+requests>=2.32  # conector ANA/SNIRH (connectors/ana_snirh.py)
+
+# Modelagem híbrida
+scikit-learn>=1.5
+joblib>=1.4
+mesa>=3.0
+
+# Web / Dashboard
+streamlit>=1.37
+plotly>=5.22
+folium>=0.17
+streamlit-folium>=0.23
+
+# As dependências abaixo são só para desenvolvimento LOCAL (orquestração e
+# conector futuro do MapBiomas) — deliberadamente fora deste arquivo para
+# manter o build do Streamlit Community Cloud rápido e enxuto. Instale à
+# parte quando for trabalhar em `orchestration/` ou `connectors/mapbiomas.py`:
+#   apache-airflow>=2.9
+#   earthengine-api>=1.1
