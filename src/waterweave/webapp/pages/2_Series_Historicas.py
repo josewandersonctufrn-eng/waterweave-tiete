@@ -16,7 +16,11 @@ from waterweave.webapp import theme
 from waterweave.webapp.data_loader import load_chuva_mensal, load_qualidade_historica, load_vazao_mensal
 
 st.set_page_config(page_title="Séries Históricas — WaterWeave-Tietê", page_icon="📈", layout="wide")
-st.title("📈 Séries Históricas — 1940-2025")
+theme.inject_style()
+theme.render_sidebar_brand()
+
+st.title("Séries Históricas")
+st.caption("1940–2025 · qualidade da água, vazão e chuva")
 
 qualidade = load_qualidade_historica()
 
@@ -48,7 +52,8 @@ for trecho_id in TRECHOS:
         )
     )
 theme.apply_common_layout(fig, y_title=titulo_eixo)
-st.plotly_chart(fig, use_container_width=True)
+with st.container(border=True):
+    st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("Ver tabela"):
     tabela_pivot = qualidade.pivot(index="ano", columns="trecho_id", values=coluna)
@@ -63,7 +68,7 @@ trecho_selecionado = st.selectbox("Trecho", options=list(TRECHOS), format_func=l
 
 col_vazao, col_chuva = st.columns(2)
 
-with col_vazao:
+with col_vazao, st.container(border=True):
     vazao = load_vazao_mensal(trecho_selecionado)
     if vazao.empty:
         st.info("Sem dado de vazão disponível para este trecho.")
@@ -81,7 +86,7 @@ with col_vazao:
         theme.apply_common_layout(fig_vazao, y_title="Vazão média mensal (m³/s)", legend=False)
         st.plotly_chart(fig_vazao, use_container_width=True)
 
-with col_chuva:
+with col_chuva, st.container(border=True):
     chuva = load_chuva_mensal(trecho_selecionado)
     if chuva.empty:
         st.info("Sem dado de chuva disponível para este trecho.")

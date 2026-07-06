@@ -24,7 +24,10 @@ from waterweave.models.abm.scenarios import CENARIOS, HORIZONTE_MESES, rodar_cen
 from waterweave.webapp import theme
 
 st.set_page_config(page_title="Comparativo de Cenários — WaterWeave-Tietê", page_icon="⚖️", layout="wide")
-st.title("⚖️ Comparativo de Cenários")
+theme.inject_style()
+theme.render_sidebar_brand()
+
+st.title("Comparativo de Cenários")
 st.caption(
     "Simulação real via ABM (Mesa) + balanço hídrico biofísico + Streeter-Phelps — "
     "não são multiplicadores ilustrativos. Ver `models.hybrid_bridge` para as simplificações assumidas."
@@ -61,7 +64,8 @@ for cenario_id in CENARIOS:
     )
 fig.update_layout(barmode="group")
 theme.apply_common_layout(fig, y_title=PARAMETROS[parametro_key])
-st.plotly_chart(fig, use_container_width=True)
+with st.container(border=True):
+    st.plotly_chart(fig, use_container_width=True)
 
 data_final = resultado["mes_data"].iloc[0].strftime("%m/%Y")
 st.subheader(f"Tabela comparativa — estado simulado ao fim do horizonte ({data_final})")

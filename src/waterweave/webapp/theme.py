@@ -7,6 +7,7 @@ divergente para deltas de cenário e status fixo para alertas).
 from __future__ import annotations
 
 import plotly.graph_objects as go
+import streamlit as st
 
 from waterweave.config import TRECHOS
 from waterweave.thresholds import STATUS, status_para_iqa, status_para_od  # noqa: F401 (re-exported for webapp callers)
@@ -65,3 +66,54 @@ def apply_common_layout(fig: go.Figure, *, y_title: str, legend: bool = True) ->
     fig.update_xaxes(showgrid=False, showline=True, linecolor=GRIDLINE)
     fig.update_yaxes(title=y_title, showgrid=True, gridcolor=GRIDLINE, zeroline=False)
     return fig
+
+
+def inject_style() -> None:
+    """Injeta o CSS compartilhado (tipografia, espaçamento, cards) — chamar uma vez no topo de cada página.
+
+    Complementa `.streamlit/config.toml` (cores/paleta de widgets nativos);
+    aqui só refinamos tipografia e espaçamento que o theme.toml não cobre.
+    """
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        html, body, [class*="css"] { font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif; }
+
+        /* Menos espaço morto no topo — a primeira dobra some com "cara de template" */
+        .block-container { padding-top: 2.2rem; padding-bottom: 3rem; }
+
+        h1 { font-weight: 700; letter-spacing: -0.02em; }
+        h2, h3 { font-weight: 600; letter-spacing: -0.01em; }
+
+        /* KPIs como cartões discretos, em vez do st.metric "nu" */
+        div[data-testid="stMetric"] {
+            background: var(--secondary-background-color, #f2f1ee);
+            border: 1px solid rgba(11,11,11,0.08);
+            border-radius: 10px;
+            padding: 0.9rem 1rem 0.7rem;
+        }
+        div[data-testid="stMetricLabel"] { font-weight: 500; }
+
+        /* Remove o rodapé "Made with Streamlit" — ruído visual, não informação */
+        footer { visibility: hidden; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar_brand() -> None:
+    """Cabeçalho de marca discreto no topo da sidebar — chamar uma vez por página."""
+    st.sidebar.markdown(
+        """
+        <div style="padding: 0.2rem 0 1rem; border-bottom: 1px solid rgba(11,11,11,0.08); margin-bottom: 1rem;">
+            <div style="font-weight:700; font-size:1.05rem; letter-spacing:-0.01em;">WaterWeave</div>
+            <div style="font-size:0.75rem; color:#898781; text-transform:uppercase; letter-spacing:0.06em;">
+                Rio Tietê · 1940–2025
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

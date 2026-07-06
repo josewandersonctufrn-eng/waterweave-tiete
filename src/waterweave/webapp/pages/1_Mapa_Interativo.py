@@ -16,7 +16,10 @@ from waterweave.webapp import theme
 from waterweave.webapp.data_loader import load_estacoes_tiete, load_sensoriamento
 
 st.set_page_config(page_title="Mapa Interativo — WaterWeave-Tietê", page_icon="🗺️", layout="wide")
-st.title("🗺️ Mapa Interativo — Rio Tietê")
+theme.inject_style()
+theme.render_sidebar_brand()
+
+st.title("Mapa Interativo — Rio Tietê")
 st.caption("Estações fluvio/pluviométricas (DAEE) e pontos de sensoriamento remoto, da nascente à foz.")
 
 estacoes = load_estacoes_tiete()

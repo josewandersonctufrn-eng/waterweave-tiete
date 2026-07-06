@@ -1,9 +1,9 @@
 """Ponto de entrada do dashboard interativo (Streamlit) — WaterWeave-Tietê.
 
 Página inicial: visão geral (KPIs por trecho) + navegação para as páginas
-de detalhe em `pages/`. Todo o acesso a dado passa por `data_loader.py`
-(leitura direta das fontes brutas — ver aviso de proveniência lá) para que,
-quando a camada Gold existir, baste trocar as implementações desse módulo.
+de detalhe em `pages/`. Todo o acesso a dado passa por `data_loader.py`,
+que lê as tabelas Silver/Gold produzidas por `waterweave.ingestion` — ver
+aviso de proveniência por fonte em cada função desse módulo.
 """
 from __future__ import annotations
 
@@ -25,8 +25,10 @@ from waterweave.webapp import theme
 from waterweave.webapp.data_loader import load_estacoes_tiete, load_qualidade_historica
 
 st.set_page_config(page_title="WaterWeave-Tietê", page_icon="💧", layout="wide")
+theme.inject_style()
+theme.render_sidebar_brand()
 
-st.title("💧 WaterWeave-Tietê")
+st.title("WaterWeave-Tietê")
 st.caption(
     "Gestão sustentável de recursos hídricos do Rio Tietê — Salesópolis (nascente) "
     "até Itapura (foz no Rio Paraná). Histórico 1940-2025 com automação mensal."
@@ -48,8 +50,8 @@ colunas = st.columns(len(TRECHOS))
 for coluna, trecho_id in zip(colunas, TRECHOS):
     linha = qualidade_recente[qualidade_recente["trecho_id"] == trecho_id]
     n_estacoes = int((estacoes["trecho_id"] == trecho_id).sum())
-    with coluna:
-        st.markdown(f"##### {theme.TRECHO_LABEL[trecho_id]}")
+    with coluna, st.container(border=True):
+        st.markdown(f"**{theme.TRECHO_LABEL[trecho_id]}**")
         if linha.empty:
             st.info("Sem dado para o ano mais recente.")
             continue

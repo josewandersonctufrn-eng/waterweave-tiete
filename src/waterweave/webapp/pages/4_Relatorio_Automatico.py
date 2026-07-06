@@ -16,7 +16,10 @@ from waterweave.webapp import theme
 from waterweave.webapp.data_loader import load_qualidade_historica
 
 st.set_page_config(page_title="Relatório Automático — WaterWeave-Tietê", page_icon="📝", layout="wide")
-st.title("📝 Relatório Automático")
+theme.inject_style()
+theme.render_sidebar_brand()
+
+st.title("Relatório Automático")
 st.caption("Análise textual gerada por regras a partir dos indicadores de qualidade da água por trecho/ano.")
 
 qualidade = load_qualidade_historica()
@@ -29,7 +32,8 @@ with col_ano:
     ano = st.select_slider("Ano de referência", options=anos_disponiveis, value=anos_disponiveis[-1])
 
 relatorio = gerar_relatorio_trecho(qualidade, trecho_id, ano)
-st.markdown(relatorio)
+with st.container(border=True):
+    st.markdown(relatorio)
 
 st.divider()
 st.subheader("Gerar para todos os trechos neste ano")
