@@ -15,6 +15,9 @@ requests>=2.32  # conector ANA/SNIRH (connectors/ana_snirh.py)
 scikit-learn>=1.5
 joblib>=1.4
 mesa>=3.0
+networkx>=3.0  # dependência real do mesa (mesa.discrete_space importa networkx sem condição);
+                # deixado explícito porque a resolução de dependências do Streamlit Cloud não
+                # o instalou automaticamente, mesmo sendo requisito de fato do mesa>=3.0
 
 # Web / Dashboard
 streamlit>=1.37
