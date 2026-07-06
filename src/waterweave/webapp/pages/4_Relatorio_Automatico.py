@@ -1,6 +1,13 @@
 """Painel de análise automatizada: relatório textual sintético por trecho e ano."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+_SRC_DIR = Path(__file__).resolve().parents[3]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 import streamlit as st
 
 from waterweave.config import TRECHOS

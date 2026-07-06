@@ -1,6 +1,13 @@
 """Séries históricas (1940-2025) de qualidade da água, vazão e chuva."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+_SRC_DIR = Path(__file__).resolve().parents[3]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 import plotly.graph_objects as go
 import streamlit as st
 

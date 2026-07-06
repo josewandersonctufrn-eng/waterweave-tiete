@@ -1,6 +1,13 @@
 """Mapa interativo das estações de monitoramento do Rio Tietê (Folium)."""
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+_SRC_DIR = Path(__file__).resolve().parents[3]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 import folium
 import streamlit as st
 from streamlit_folium import st_folium

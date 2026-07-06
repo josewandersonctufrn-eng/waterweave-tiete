@@ -7,6 +7,17 @@ quando a camada Gold existir, baste trocar as implementações desse módulo.
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Garante que `src/` esteja no sys.path mesmo se a instalação editável
+# (`pip install -e .`, ver requirements.txt) não for respeitada pelo
+# ambiente de deploy (ex.: Streamlit Community Cloud) — funciona
+# independentemente de packaging, sem custo extra localmente.
+_SRC_DIR = Path(__file__).resolve().parents[2]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 import streamlit as st
 
 from waterweave.config import TRECHOS
