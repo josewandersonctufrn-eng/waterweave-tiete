@@ -99,6 +99,13 @@ def rodar_cenario_customizado(
             "iqa": passo.iqa_simulado,
             "od_mg_l": passo.od_simulado_mg_l,
             "dbo_mg_l": passo.dbo_simulado_mg_l,
+            "turbidez_ntu": passo.turbidez_ntu,
+            "solidos_totais_mg_l": passo.solidos_totais_mg_l,
+            "temperatura_c": passo.temperatura_c,
+            "ph": passo.ph,
+            "fosforo_mg_l": passo.fosforo_mg_l,
+            "nitrogenio_mg_l": passo.nitrogenio_mg_l,
+            "e_coli_nmp_100ml": passo.e_coli_nmp_100ml,
         }
         for i, passo in enumerate(modelo.historico)
     ]

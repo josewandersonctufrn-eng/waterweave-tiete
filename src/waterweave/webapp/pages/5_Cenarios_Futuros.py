@@ -1,19 +1,30 @@
 """Cenários Futuros: o usuário controla as alavancas reais do ABM (saneamento, fiscalização,
 controle de agrotóxicos, outorga) e compara, num horizonte contínuo de 5 a 30 anos, o que
 acontece com o Rio Tietê se essas medidas NÃO forem tomadas vs. se forem tomadas no nível
-escolhido.
+escolhido — agora reportando os 8 parâmetros físicos/químicos/biológicos identificados na
+análise de poluição do projeto (ver docs/Analise_Poluicao_Rio_Tiete.docx), não só IQA/OD/DBO.
 
 Reaproveita 100% do motor de simulação real já existente (`models.abm`, Mesa +
 balanço hídrico + Streeter-Phelps via `models.hybrid_bridge`) — os sliders
 desta página não são multiplicadores de fachada: eles alimentam parâmetros
 reais dos agentes (`IndustriaAgent.crescimento_mensal/teto_fator_carga`,
 `PoderPublicoAgent.fiscaliza_em_serio`, `AgricultorAgent.reducao/piso_fator`,
-`ComiteBaciaAgent` via `piso_fator_outorga`), extendidos em
-`models.abm.agents`/`models.abm.model` especificamente para esta tela.
+`ComiteBaciaAgent` via `piso_fator_outorga`), e os submodelos de
+`models.biofisico.parametros_estendidos` (Turbidez, Sólidos Totais,
+Temperatura, pH, Fósforo, Nitrogênio, E. coli), ancorados em médias reais
+2012-2024 da CETESB.
 
 A mudança climática assumida (`fator_clima`) é aplicada IGUAL nos dois
 cenários — é uma condição externa, não uma medida de controle local — para
 que a comparação isole o efeito das medidas de gestão da bacia.
+
+A animação 3D usa um tratamento "cinematográfico" (gradiente de cor
+poluído→limpo, névoa proporcional à turbidez simulada, rótulo de fase)
+inspirado no roteiro de 4 fases (água limpa → despejo/poluição → tratamento
+→ recuperação) pedido para esta tela — mas 100% pilotado pelos números reais
+da simulação, não uma animação decorativa solta. Vídeo fotorrealista (peixes,
+floresta, tubos industriais) exigiria um serviço externo de geração de vídeo
+por IA (Sora/Runway/Pika), fora do escopo deste dashboard Streamlit/Plotly.
 """
 from __future__ import annotations
 
@@ -44,12 +55,36 @@ st.caption(
     "Ajuste as medidas de gestão da bacia e veja, de 5 a 30 anos à frente, o que acontece "
     "se elas **não** forem tomadas vs. se forem tomadas no nível que você escolher. "
     "Simulação real via ABM (Mesa) + balanço hídrico + Streeter-Phelps — não são "
-    "multiplicadores ilustrativos. Ver `models.hybrid_bridge` e `models.abm.agents` para as "
-    "simplificações assumidas (coeficientes não calibrados em campo, cada trecho simulado de "
-    "forma independente, sem propagar carga de montante para jusante)."
+    "multiplicadores ilustrativos. Ver `models.hybrid_bridge`, `models.abm.agents` e "
+    "`models.biofisico.parametros_estendidos` para as simplificações assumidas (coeficientes "
+    "não calibrados em campo, cada trecho simulado de forma independente, sem propagar carga "
+    "de montante para jusante)."
 )
 
 TRECHO_IDS = list(TRECHOS)
+
+# ---------------------------------------------------------------------------
+# Parâmetros monitorados: rótulos, unidades e agrupamento físico/químico/biológico
+# (mesma taxonomia da análise de poluição do projeto).
+# ---------------------------------------------------------------------------
+PARAMETROS_POR_CATEGORIA = {
+    "🧪 Físicos": {
+        "turbidez_ntu": ("Turbidez", "NTU"),
+        "temperatura_c": ("Temperatura da Água", "°C"),
+        "solidos_totais_mg_l": ("Sólidos Totais", "mg/L"),
+    },
+    "⚗️ Químicos": {
+        "od_mg_l": ("Oxigênio Dissolvido (OD)", "mg/L"),
+        "dbo_mg_l": ("Demanda Bioquímica de Oxigênio (DBO)", "mg/L"),
+        "ph": ("Potencial Hidrogeniônico (pH)", ""),
+        "fosforo_mg_l": ("Fósforo Total", "mg/L"),
+        "nitrogenio_mg_l": ("Nitrogênio Total", "mg/L"),
+    },
+    "🦠 Biológicos": {
+        "e_coli_nmp_100ml": ("E. coli (ex-Coliformes Termotolerantes)", "NMP/100 mL"),
+    },
+}
+TODOS_PARAMETROS = {chave: rotulo for grupo in PARAMETROS_POR_CATEGORIA.values() for chave, rotulo in grupo.items()}
 
 # ---------------------------------------------------------------------------
 # Cenário "não controlado" — patamar fixo, pessimista, representando a
@@ -75,8 +110,9 @@ with col_horizonte:
 with col_clima:
     clima_severidade = st.slider(
         "Severidade da mudança climática assumida", min_value=60, max_value=105, value=90, format="%d%%",
-        help="Fator aplicado à chuva climatológica histórica. Aplicado IGUALMENTE aos dois "
-        "cenários abaixo — é uma condição externa, não uma medida de controle da bacia.",
+        help="Fator aplicado à chuva climatológica histórica (também eleva a temperatura simulada). "
+        "Aplicado IGUALMENTE aos dois cenários abaixo — é uma condição externa, não uma medida de "
+        "controle da bacia.",
     ) / 100.0
 
 st.markdown("#### Medidas de controle — defina o cenário **controlado**")
@@ -85,7 +121,8 @@ c3, c4 = st.columns(2)
 with c1:
     saneamento_pct = st.slider(
         "🏭 Investimento em saneamento / tratamento de efluentes", 0, 100, 60, format="%d%%",
-        help="Reduz a taxa de crescimento mensal e o teto da carga poluidora industrial/doméstica lançada no rio.",
+        help="Reduz a taxa de crescimento mensal e o teto da carga poluidora industrial/doméstica lançada "
+        "no rio — afeta DBO, OD, E. coli, parte do Fósforo/Nitrogênio, Sólidos Totais e pH.",
     )
 with c2:
     fiscalizacao_pct = st.slider(
@@ -95,8 +132,9 @@ with c2:
     )
 with c3:
     agrotoxicos_pct = st.slider(
-        "🌾 Controle de agrotóxicos / poluição difusa agrícola", 0, 100, 60, format="%d%%",
-        help="Ativa a restrição ambiental sobre o Agricultor e define o quanto ele reduz o uso de agroquímicos.",
+        "🌾 Controle de agrotóxicos, nutrientes e sedimentos (poluição difusa agrícola)", 0, 100, 60, format="%d%%",
+        help="Ativa a restrição ambiental sobre o Agricultor — afeta Fósforo/Nitrogênio de origem agrícola, "
+        "Turbidez e Sólidos Totais (erosão/sedimento).",
     )
 with c4:
     outorga_piso = st.slider(
@@ -132,15 +170,17 @@ hist_controlado = _rodar(CONTROLADO_PARAMS, clima_severidade, horizonte_meses)
 
 # Média ANUAL (não o último mês) por trecho — o clima simulado é sazonal e o
 # último mês de um "ano_relativo" pode cair em período seco ou chuvoso quase
-# ao acaso, fazendo IQA/OD oscilar de forma enganosa entre extremos se
+# ao acaso, fazendo os parâmetros oscilar de forma enganosa entre extremos se
 # usássemos snapshot pontual. A média suaviza a sazonalidade e reflete melhor
 # a condição geral do rio naquele ano — base de KPIs, trajetória e animação 3D.
+_COLUNAS_MEDIA = ["iqa", "od_mg_l", "dbo_mg_l", "vazao_m3s_medio", *TODOS_PARAMETROS.keys()]
+_COLUNAS_MEDIA = list(dict.fromkeys(_COLUNAS_MEDIA))  # remove duplicatas (od_mg_l/dbo_mg_l já em TODOS_PARAMETROS)
+
+
 def _media_anual(historico: pd.DataFrame) -> pd.DataFrame:
-    anual = historico.groupby(["trecho_id", "ano_relativo"], as_index=False).agg(
-        iqa=("iqa", "mean"), od_mg_l=("od_mg_l", "mean"), dbo_mg_l=("dbo_mg_l", "mean"),
-        vazao_m3s_medio=("vazao_m3s_medio", "mean"), multas_acumuladas=("multas_acumuladas", "max"),
-    )
-    return anual
+    agregacoes = {col: (col, "mean") for col in _COLUNAS_MEDIA}
+    agregacoes["multas_acumuladas"] = ("multas_acumuladas", "max")
+    return historico.groupby(["trecho_id", "ano_relativo"], as_index=False).agg(**agregacoes)
 
 
 anual_nao_controlado = _media_anual(hist_nao_controlado)
@@ -180,14 +220,14 @@ else:
     )
 if agrotoxicos_pct < 20:
     narrativa.append(
-        "🌾 **Agrotóxicos** (" + str(agrotoxicos_pct) + "%): nenhuma restrição ambiental sobre o uso de "
-        "agroquímicos é ativada — igual ao cenário não controlado."
+        "🌾 **Agrotóxicos/nutrientes/sedimentos** (" + str(agrotoxicos_pct) + "%): nenhuma restrição ambiental "
+        "sobre o uso de agroquímicos é ativada — igual ao cenário não controlado."
     )
 else:
     narrativa.append(
-        f"🌾 **Agrotóxicos** ({agrotoxicos_pct}%): restrição ambiental ativa; o uso de agroquímicos pode ser "
-        f"reduzido até o piso de {CONTROLADO_PARAMS['piso_fator_difusa']:.0%} da carga difusa-base (contra 90% "
-        f"no cenário não controlado)."
+        f"🌾 **Agrotóxicos/nutrientes/sedimentos** ({agrotoxicos_pct}%): restrição ambiental ativa; a carga "
+        f"difusa (agrotóxicos, fósforo/nitrogênio agrícola, erosão) pode ser reduzida até o piso de "
+        f"{CONTROLADO_PARAMS['piso_fator_difusa']:.0%} da carga-base (contra 90% no cenário não controlado)."
     )
 narrativa.append(
     f"💧 **Outorga/captação**: vazão ecológica mínima reservada de {outorga_piso:.0%} da vazão simulada "
@@ -197,7 +237,7 @@ for linha in narrativa:
     st.markdown(f"- {linha}")
 
 # ---------------------------------------------------------------------------
-# KPIs comparativos ao fim do horizonte
+# KPIs comparativos ao fim do horizonte (IQA/status)
 # ---------------------------------------------------------------------------
 st.markdown(f"### Estado simulado ao final de {horizonte_anos} anos, por trecho")
 colunas_kpi = st.columns(len(TRECHO_IDS))
@@ -214,7 +254,6 @@ for coluna, trecho_id in zip(colunas_kpi, TRECHO_IDS):
             st.info("Sem dado simulado para este horizonte.")
             continue
         iqa_nc, iqa_c = float(linha_nc["iqa"].iloc[0]), float(linha_c["iqa"].iloc[0])
-        od_nc, od_c = float(linha_nc["od_mg_l"].iloc[0]), float(linha_c["od_mg_l"].iloc[0])
         status_nc = STATUS[status_para_iqa(iqa_nc)]
         status_c = STATUS[status_para_iqa(iqa_c)]
         st.metric("IQA — não controlado", f"{iqa_nc:.1f}", help=status_nc["label"])
@@ -223,7 +262,48 @@ for coluna, trecho_id in zip(colunas_kpi, TRECHO_IDS):
             f"{status_nc['icon']} não controlado: **{status_nc['label']}** &nbsp;→&nbsp; "
             f"{status_c['icon']} controlado: **{status_c['label']}**"
         )
-        st.caption(f"OD: {od_nc:.2f} mg/L → {od_c:.2f} mg/L")
+
+# ---------------------------------------------------------------------------
+# Painel detalhado: os 8 parâmetros físicos/químicos/biológicos, por trecho
+# ---------------------------------------------------------------------------
+st.markdown("### Parâmetros monitorados — Físicos, Químicos e Biológicos")
+trecho_detalhe = st.selectbox(
+    "Trecho para detalhamento", options=TRECHO_IDS, format_func=lambda t: theme.TRECHO_LABEL[t], key="trecho_detalhe"
+)
+linha_nc_det = anual_nao_controlado[
+    (anual_nao_controlado.trecho_id == trecho_detalhe) & (anual_nao_controlado.ano_relativo == horizonte_anos)
+]
+linha_c_det = anual_controlado[
+    (anual_controlado.trecho_id == trecho_detalhe) & (anual_controlado.ano_relativo == horizonte_anos)
+]
+_MENOR_MELHOR = {"turbidez_ntu", "solidos_totais_mg_l", "dbo_mg_l", "fosforo_mg_l", "nitrogenio_mg_l", "e_coli_nmp_100ml"}
+_SEM_DIRECAO = {"ph", "temperatura_c"}  # nem sempre "maior"/"menor" é melhor de forma simples
+
+if linha_nc_det.empty or linha_c_det.empty:
+    st.info("Sem dado simulado para este horizonte.")
+else:
+    for categoria, parametros in PARAMETROS_POR_CATEGORIA.items():
+        st.markdown(f"**{categoria}**")
+        colunas = st.columns(len(parametros))
+        for coluna, (chave, (nome, unidade)) in zip(colunas, parametros.items()):
+            v_nc = float(linha_nc_det[chave].iloc[0])
+            v_c = float(linha_c_det[chave].iloc[0])
+            with coluna:
+                sufixo = f" {unidade}" if unidade else ""
+                casas = 2 if v_c < 1000 else 0
+                if chave in _SEM_DIRECAO:
+                    cor_delta = "off"
+                elif chave in _MENOR_MELHOR:
+                    cor_delta = "inverse"
+                else:
+                    cor_delta = "normal"
+                st.metric(
+                    nome,
+                    f"{v_c:,.{casas}f}{sufixo}",
+                    delta=f"{v_c - v_nc:+,.{casas}f} vs. não controlado",
+                    delta_color=cor_delta,
+                )
+                st.caption(f"Não controlado: {v_nc:,.{casas}f}{sufixo}")
 
 # ---------------------------------------------------------------------------
 # Trajetória ao longo do tempo (2D, preciso — complementa a visão 3D)
@@ -232,11 +312,14 @@ st.markdown("### Trajetória ano a ano")
 trecho_selecionado = st.selectbox(
     "Trecho", options=TRECHO_IDS, format_func=lambda t: theme.TRECHO_LABEL[t], key="trecho_trajetoria"
 )
-parametro_key = st.radio(
-    "Parâmetro", options=["iqa", "od_mg_l", "dbo_mg_l"],
-    format_func=lambda k: {"iqa": "IQA simulado", "od_mg_l": "Oxigênio Dissolvido (mg/L)", "dbo_mg_l": "DBO (mg/L)"}[k],
-    horizontal=True,
+categoria_selecionada = st.radio(
+    "Categoria", options=list(PARAMETROS_POR_CATEGORIA), horizontal=True, key="categoria_trajetoria"
 )
+parametro_key = st.radio(
+    "Parâmetro", options=list(PARAMETROS_POR_CATEGORIA[categoria_selecionada]),
+    format_func=lambda k: TODOS_PARAMETROS[k][0], horizontal=True, key="parametro_trajetoria",
+)
+nome_parametro, unidade_parametro = TODOS_PARAMETROS[parametro_key]
 serie_nc = anual_nao_controlado[anual_nao_controlado.trecho_id == trecho_selecionado].sort_values("ano_relativo")
 serie_c = anual_controlado[anual_controlado.trecho_id == trecho_selecionado].sort_values("ano_relativo")
 
@@ -250,36 +333,71 @@ fig_traj.add_trace(go.Scatter(
     line=dict(color="#1baf7a", width=2.5), mode="lines+markers",
 ))
 fig_traj.update_xaxes(title="Anos a partir de hoje")
-theme.apply_common_layout(fig_traj, y_title=parametro_key)
+rotulo_y = f"{nome_parametro} ({unidade_parametro})" if unidade_parametro else nome_parametro
+theme.apply_common_layout(fig_traj, y_title=rotulo_y)
 with st.container(border=True):
     st.plotly_chart(fig_traj, width="stretch")
 
 # ---------------------------------------------------------------------------
-# Animação 3D — perfil longitudinal do rio, nascente -> foz, evoluindo ano a ano
+# Animação 3D "cinematográfica" — perfil longitudinal do rio, nascente -> foz,
+# evoluindo ano a ano. Gradiente de cor poluído→limpo e névoa proporcional à
+# turbidez simulada substituem o vídeo fotorrealista pedido originalmente,
+# mantendo tudo pilotado pelos números reais da simulação (ver docstring do
+# módulo).
 # ---------------------------------------------------------------------------
 st.markdown("### Animação 3D — o rio inteiro, ano a ano")
 st.caption(
-    "Eixo Z = severidade da poluição simulada (100 − IQA) — quanto mais alto, pior. Cada ponto real de "
-    "monitoramento recebe o valor simulado do trecho ao qual pertence. Use o botão ▶ ou arraste o controle "
-    "de ano."
+    "Eixo Z = severidade da poluição simulada (100 − IQA) — quanto mais alto, pior. A cor varia "
+    "continuamente de poluído (cinza-acastanhado) a limpo (verde-azulado), e o tamanho dos marcadores "
+    "cresce com a turbidez simulada, criando um efeito de 'névoa' nos trechos mais turvos. Cada ponto "
+    "real de monitoramento recebe o valor simulado do trecho ao qual pertence. Use o botão ▶ ou "
+    "arraste o controle de ano."
 )
 
 estacoes = load_estacoes_tiete().dropna(subset=["longitude", "latitude"]).copy()
 estacoes = estacoes.sort_values("longitude", ascending=False).reset_index(drop=True)
 
-STATUS_COLOR = {chave: valor["color"] for chave, valor in STATUS.items()}
+_COR_POLUIDO = (120, 100, 74)  # cinza-acastanhado (lodo/espuma)
+_COR_LIMPO = (27, 175, 122)  # verde-azulado (aqua do tema)
+
+
+def _cor_por_iqa(iqa: float) -> str:
+    """Gradiente contínuo poluído->limpo (em vez de 4 blocos discretos de status) — leitura mais
+    'cinematográfica' das transições entre as fases do rio."""
+    t = max(0.0, min(1.0, iqa / 100.0))
+    r = round(_COR_POLUIDO[0] + (_COR_LIMPO[0] - _COR_POLUIDO[0]) * t)
+    g = round(_COR_POLUIDO[1] + (_COR_LIMPO[1] - _COR_POLUIDO[1]) * t)
+    b = round(_COR_POLUIDO[2] + (_COR_LIMPO[2] - _COR_POLUIDO[2]) * t)
+    return f"rgb({r},{g},{b})"
+
+
+def _tamanho_por_turbidez(turbidez_ntu: float) -> float:
+    """Marcadores maiores/mais 'nebulosos' em trechos mais turvos — proxy visual de névoa/lodo."""
+    return max(6.0, min(20.0, 6.0 + 14.0 * (turbidez_ntu / 40.0)))
+
+
+def _fase(iqa_media_atual: float, iqa_media_anterior: float | None) -> str:
+    if iqa_media_atual >= 70:
+        return "💧 Água limpa" if iqa_media_anterior is None or iqa_media_anterior >= 65 else "✨ Recuperação concluída"
+    if iqa_media_anterior is not None and iqa_media_atual - iqa_media_anterior > 1.5:
+        return "🌊 Tratamento em ação — recuperando"
+    if iqa_media_anterior is not None and iqa_media_atual - iqa_media_anterior < -1.5:
+        return "🛢️ Poluição avançando"
+    return "🔴 Estado crítico estável"
 
 
 def _construir_series_por_ponto(anual: pd.DataFrame) -> dict[int, pd.DataFrame]:
-    """Para cada ano, retorna um DataFrame (1 linha por ponto de estação) com iqa/severidade/cor."""
+    """Para cada ano, retorna um DataFrame (1 linha por ponto de estação) com iqa/severidade/cor/tamanho."""
     por_ano = {}
     for ano in sorted(anual["ano_relativo"].unique()):
-        estado_trecho = anual[anual.ano_relativo == ano].set_index("trecho_id")["iqa"].to_dict()
+        estado_trecho = anual[anual.ano_relativo == ano].set_index("trecho_id")
         pontos = estacoes.copy()
-        pontos["iqa"] = pontos["trecho_id"].map(estado_trecho)
+        pontos["iqa"] = pontos["trecho_id"].map(estado_trecho["iqa"].to_dict())
+        pontos["turbidez_ntu"] = pontos["trecho_id"].map(estado_trecho["turbidez_ntu"].to_dict())
         pontos = pontos.dropna(subset=["iqa"])
         pontos["severidade"] = 100 - pontos["iqa"]
-        pontos["cor"] = pontos["iqa"].apply(lambda v: STATUS_COLOR[status_para_iqa(v)])
+        pontos["cor"] = pontos["iqa"].apply(_cor_por_iqa)
+        pontos["tamanho"] = pontos["turbidez_ntu"].apply(_tamanho_por_turbidez)
         por_ano[ano] = pontos
     return por_ano
 
@@ -287,6 +405,9 @@ def _construir_series_por_ponto(anual: pd.DataFrame) -> dict[int, pd.DataFrame]:
 series_nc = _construir_series_por_ponto(anual_nao_controlado)
 series_c = _construir_series_por_ponto(anual_controlado)
 anos_disponiveis = sorted(series_nc.keys())
+
+_iqa_medio_nc = {ano: series_nc[ano]["iqa"].mean() for ano in anos_disponiveis}
+_iqa_medio_c = {ano: series_c[ano]["iqa"].mean() for ano in anos_disponiveis}
 
 
 def _stems(pontos: pd.DataFrame):
@@ -312,8 +433,9 @@ def _trace_perfil(pontos: pd.DataFrame, scene_suffix: str, nome: str) -> go.Scat
         x=pontos["longitude"], y=pontos["latitude"], z=pontos["severidade"],
         mode="lines+markers",
         line=dict(color="#3a3a36", width=4),
-        marker=dict(size=6, color=pontos["cor"]),
-        text=pontos["municipio"] + " (IQA " + pontos["iqa"].round(1).astype(str) + ")",
+        marker=dict(size=list(pontos["tamanho"]), color=list(pontos["cor"]), opacity=0.88),
+        text=pontos["municipio"] + " (IQA " + pontos["iqa"].round(1).astype(str)
+        + ", Turbidez " + pontos["turbidez_ntu"].round(0).astype(str) + " NTU)",
         hoverinfo="text", name=nome, scene=scene_suffix, showlegend=False,
     )
 
@@ -321,7 +443,7 @@ def _trace_perfil(pontos: pd.DataFrame, scene_suffix: str, nome: str) -> go.Scat
 def _trace_stems(pontos: pd.DataFrame, scene_suffix: str) -> go.Scatter3d:
     xs, ys, zs = _stems(pontos)
     return go.Scatter3d(
-        x=xs, y=ys, z=zs, mode="lines", line=dict(color="rgba(150,60,60,0.35)", width=2),
+        x=xs, y=ys, z=zs, mode="lines", line=dict(color="rgba(120,100,74,0.35)", width=2),
         scene=scene_suffix, showlegend=False, hoverinfo="skip",
     )
 
@@ -339,27 +461,44 @@ traces_iniciais = [
 for i, tr in enumerate(traces_iniciais):
     fig3d.add_trace(tr, row=1, col=(1 if i < 3 else 2))
 
+fig3d.update_layout(annotations=list(fig3d.layout.annotations) + [
+    dict(text=_fase(_iqa_medio_nc[ano0], None), x=0.22, y=1.16, xref="paper", yref="paper",
+         showarrow=False, font=dict(size=13, color="#3a3a36")),
+    dict(text=_fase(_iqa_medio_c[ano0], None), x=0.78, y=1.16, xref="paper", yref="paper",
+         showarrow=False, font=dict(size=13, color="#3a3a36")),
+])
+
 frames = []
-for ano in anos_disponiveis:
+for idx, ano in enumerate(anos_disponiveis):
     xs_nc, ys_nc, zs_nc = _stems(series_nc[ano])
     xs_c, ys_c, zs_c = _stems(series_c[ano])
+    ano_anterior = anos_disponiveis[idx - 1] if idx > 0 else None
+    fase_nc = _fase(_iqa_medio_nc[ano], _iqa_medio_nc.get(ano_anterior))
+    fase_c = _fase(_iqa_medio_c[ano], _iqa_medio_c.get(ano_anterior))
+    anotacoes_frame = list(fig3d.layout.annotations[:2]) + [
+        dict(text=fase_nc, x=0.22, y=1.16, xref="paper", yref="paper", showarrow=False, font=dict(size=13, color="#3a3a36")),
+        dict(text=fase_c, x=0.78, y=1.16, xref="paper", yref="paper", showarrow=False, font=dict(size=13, color="#3a3a36")),
+    ]
     frames.append(go.Frame(
         name=str(ano),
         data=[
             go.Scatter3d(x=xs_nc, y=ys_nc, z=zs_nc),
             go.Scatter3d(
                 x=series_nc[ano]["longitude"], y=series_nc[ano]["latitude"], z=series_nc[ano]["severidade"],
-                marker=dict(color=series_nc[ano]["cor"]),
-                text=series_nc[ano]["municipio"] + " (IQA " + series_nc[ano]["iqa"].round(1).astype(str) + ")",
+                marker=dict(color=list(series_nc[ano]["cor"]), size=list(series_nc[ano]["tamanho"])),
+                text=series_nc[ano]["municipio"] + " (IQA " + series_nc[ano]["iqa"].round(1).astype(str)
+                + ", Turbidez " + series_nc[ano]["turbidez_ntu"].round(0).astype(str) + " NTU)",
             ),
             go.Scatter3d(x=xs_c, y=ys_c, z=zs_c),
             go.Scatter3d(
                 x=series_c[ano]["longitude"], y=series_c[ano]["latitude"], z=series_c[ano]["severidade"],
-                marker=dict(color=series_c[ano]["cor"]),
-                text=series_c[ano]["municipio"] + " (IQA " + series_c[ano]["iqa"].round(1).astype(str) + ")",
+                marker=dict(color=list(series_c[ano]["cor"]), size=list(series_c[ano]["tamanho"])),
+                text=series_c[ano]["municipio"] + " (IQA " + series_c[ano]["iqa"].round(1).astype(str)
+                + ", Turbidez " + series_c[ano]["turbidez_ntu"].round(0).astype(str) + " NTU)",
             ),
         ],
         traces=[1, 2, 4, 5],
+        layout=go.Layout(annotations=anotacoes_frame),
     ))
 fig3d.frames = frames
 
@@ -369,12 +508,12 @@ eixo_cena = dict(
     camera=dict(eye=dict(x=1.6, y=-1.7, z=0.9)),
 )
 fig3d.update_layout(
-    height=620,
+    height=680,
     scene=eixo_cena,
     scene2=eixo_cena,
-    margin=dict(l=0, r=0, t=40, b=0),
+    margin=dict(l=0, r=0, t=95, b=0),
     updatemenus=[dict(
-        type="buttons", showactive=False, x=0.02, y=1.08, xanchor="left",
+        type="buttons", showactive=False, x=0.02, y=1.14, xanchor="left",
         buttons=[
             dict(label="▶ Reproduzir", method="animate",
                  args=[None, {"frame": {"duration": 700, "redraw": True}, "fromcurrent": True, "transition": {"duration": 200}}]),
@@ -399,12 +538,21 @@ with st.expander("Premissas e limitações desta simulação"):
     st.markdown(
         "- O IQA usado aqui é um **proxy simplificado** (`models.hybrid_bridge.iqa_proxy`, função de OD/DBO), "
         "não o IQA oficial CETESB/NSF de 9 parâmetros.\n"
+        "- Turbidez, Sólidos Totais, Temperatura, pH, Fósforo, Nitrogênio e E. coli usam submodelos "
+        "simplificados (`models.biofisico.parametros_estendidos`) ancorados em médias reais 2012-2024 "
+        "da CETESB, escalados pelos mesmos fatores de carga/diluição do ABM — não são calibrados com "
+        "série temporal completa (o projeto ainda não ingeriu `base_de_dados_pontos.xlsx` formalmente "
+        "no pipeline — ver \"Próximos passos\" do README).\n"
+        "- Temperatura reflete apenas o cenário climático (não é controlável pelas medidas de saneamento/"
+        "fiscalização/agrotóxicos/outorga).\n"
         "- Cada trecho é simulado **de forma independente** — a carga/vazão do Alto Tietê não é propagada "
         "para o Médio, nem deste para o Baixo (extensão natural, não implementada).\n"
         "- Coeficientes de Streeter-Phelps e do balanço hídrico são valores típicos de literatura, "
         "**não calibrados especificamente para o Tietê**.\n"
         "- A animação 3D atribui a cada ponto real de monitoramento o valor simulado do **trecho** ao qual "
-        "pertence — não há simulação em granularidade de ponto individual.\n"
+        "pertence — não há simulação em granularidade de ponto individual. O tratamento visual "
+        "(gradiente de cor, tamanho por turbidez, rótulo de fase) é sempre derivado desses números "
+        "simulados, não é uma animação decorativa solta.\n"
         "- O cenário 'não controlado' é um patamar fixo definido para esta página (não um dos 3 cenários "
         "de `3_Comparativo_Cenarios.py`), representando a continuidade das regras de decisão sem "
         "novas medidas de controle."

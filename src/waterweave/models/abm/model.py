@@ -131,6 +131,7 @@ class RioTieteModel(mesa.Model):
                 self.parametros_por_trecho[trecho_id],
                 chuva_mes,
                 self._uso_solo[trecho_id],
+                fator_clima=self.fator_clima,
             )
             self.estado_hidrologico_por_trecho[trecho_id] = passo.estado_hidrologico
             self.ultimo_passo_por_trecho[trecho_id] = passo

@@ -23,7 +23,7 @@ import pandas as pd
 
 from waterweave.config import GOLD_DIR
 from waterweave.io_delta import read_table
-from waterweave.models.biofisico import balanco_hidrico, qualidade_agua
+from waterweave.models.biofisico import balanco_hidrico, parametros_estendidos, qualidade_agua
 
 # Distância típica entre um lançamento de efluente e o ponto de monitoramento
 # dentro do trecho (km) — muito menor que o comprimento total do trecho
@@ -74,6 +74,13 @@ class PassoHibrido:
     od_simulado_mg_l: float
     dbo_simulado_mg_l: float
     iqa_simulado: float
+    turbidez_ntu: float
+    solidos_totais_mg_l: float
+    temperatura_c: float
+    ph: float
+    fosforo_mg_l: float
+    nitrogenio_mg_l: float
+    e_coli_nmp_100ml: float
 
 
 @lru_cache(maxsize=None)
@@ -116,6 +123,37 @@ def carga_base_trecho_kg_dia(trecho_id: str) -> float:
     return float(ultimo["dbo_mg_l"] * vazao_ref * 86.4)
 
 
+@lru_cache(maxsize=None)
+def _vazao_media_historica_trecho(trecho_id: str) -> float:
+    """Vazão média histórica real do trecho (`gold.serie_temporal_trecho_mes`) — usada só para
+    back-calcular a carga-base dos parâmetros estendidos (`carga_base_*_kg_dia`), mesmo padrão
+    de `carga_base_trecho_kg_dia`."""
+    serie = read_table(GOLD_DIR / "serie_temporal_trecho_mes")
+    historico = serie[serie["trecho_id"] == trecho_id]["vazao_m3s_medio"].dropna()
+    return float(historico.mean()) if not historico.empty else 1.0
+
+
+@lru_cache(maxsize=None)
+def carga_base_fosforo_kg_dia(trecho_id: str) -> float:
+    return parametros_estendidos.carga_base_kg_dia(
+        parametros_estendidos.ANCORA_FOSFORO_MG_L[trecho_id], _vazao_media_historica_trecho(trecho_id)
+    )
+
+
+@lru_cache(maxsize=None)
+def carga_base_nitrogenio_kg_dia(trecho_id: str) -> float:
+    return parametros_estendidos.carga_base_kg_dia(
+        parametros_estendidos.ANCORA_NITROGENIO_MG_L[trecho_id], _vazao_media_historica_trecho(trecho_id)
+    )
+
+
+@lru_cache(maxsize=None)
+def carga_base_ecoli_kg_dia(trecho_id: str) -> float:
+    return parametros_estendidos.carga_base_kg_dia(
+        parametros_estendidos.ANCORA_ECOLI_NMP_100ML[trecho_id], _vazao_media_historica_trecho(trecho_id)
+    )
+
+
 def estado_hidrologico_inicial(trecho_id: str) -> balanco_hidrico.EstadoHidrologico:
     return balanco_hidrico.estado_inicial(trecho_id)
 
@@ -127,6 +165,7 @@ def executar_passo(
     parametros_agentes: ParametrosAgentes,
     chuva_mm: float,
     uso_solo: str | None,
+    fator_clima: float = 1.0,
 ) -> PassoHibrido:
     """Executa um passo mensal completo (biofísico -> qualidade da água) para um trecho,
     sob os parâmetros de decisão vigentes dos agentes."""
@@ -144,6 +183,19 @@ def executar_passo(
     od, dbo = qualidade_agua.simular_od_dbo(vazao_diluicao, carga_total, DISTANCIA_REFERENCIA_KM[trecho_id])
     iqa = iqa_proxy(od, dbo)
 
+    estendidos = parametros_estendidos.simular_parametros_estendidos(
+        trecho_id=trecho_id,
+        fator_carga_industria=parametros_agentes.fator_carga_industria,
+        fator_carga_difusa=parametros_agentes.fator_carga_difusa,
+        vazao_diluicao_m3s=vazao_diluicao,
+        indice_escoamento_mm=novo_estado_hidrologico.indice_escoamento_mm,
+        dbo_simulado_mg_l=dbo,
+        fator_clima=fator_clima,
+        carga_base_fosforo_kg_dia=carga_base_fosforo_kg_dia(trecho_id),
+        carga_base_nitrogenio_kg_dia=carga_base_nitrogenio_kg_dia(trecho_id),
+        carga_base_ecoli_kg_dia=carga_base_ecoli_kg_dia(trecho_id),
+    )
+
     return PassoHibrido(
         trecho_id=trecho_id,
         mes_data=mes_data,
@@ -152,4 +204,11 @@ def executar_passo(
         od_simulado_mg_l=od,
         dbo_simulado_mg_l=dbo,
         iqa_simulado=iqa,
+        turbidez_ntu=estendidos.turbidez_ntu,
+        solidos_totais_mg_l=estendidos.solidos_totais_mg_l,
+        temperatura_c=estendidos.temperatura_c,
+        ph=estendidos.ph,
+        fosforo_mg_l=estendidos.fosforo_mg_l,
+        nitrogenio_mg_l=estendidos.nitrogenio_mg_l,
+        e_coli_nmp_100ml=estendidos.e_coli_nmp_100ml,
     )
