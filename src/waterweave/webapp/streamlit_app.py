@@ -35,6 +35,7 @@ with st.sidebar:
         - **Mapa Interativo** — estações de monitoramento georreferenciadas, nascente → foz.
         - **Séries Históricas** — vazão, chuva e qualidade da água, 1940-2025.
         - **Comparativo de Cenários** — Atual vs. Alta Restrição de Outorga vs. Mudança Climática Extrema.
+        - **Cenários Futuros** — simule 5 a 30 anos à frente ajustando saneamento, fiscalização, agrotóxicos e outorga; veja o rio em 3D.
         - **Relatório Automático** — análise textual sintética por trecho e ano.
         """
     )

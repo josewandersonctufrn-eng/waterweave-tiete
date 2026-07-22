@@ -58,6 +58,12 @@ class RioTieteModel(mesa.Model):
         piso_fator_outorga: float = 0.5,
         restricao_ambiental: bool = False,
         seed: int | None = None,
+        fiscaliza_em_serio: bool = False,
+        crescimento_mensal_industria: float = 1.01,
+        reducao_por_multa: float = 0.85,
+        teto_fator_carga_industria: float = 2.0,
+        reducao_agricola: float = 0.95,
+        piso_fator_difusa: float = 0.5,
     ):
         super().__init__(rng=seed)
         self.trechos = trechos
@@ -86,9 +92,15 @@ class RioTieteModel(mesa.Model):
         for trecho_id in trechos:
             self.agentes_por_trecho[trecho_id] = {
                 "comite": ComiteBaciaAgent(self, trecho_id),
-                "poder_publico": PoderPublicoAgent(self, trecho_id),
-                "industria": IndustriaAgent(self, trecho_id),
-                "agricultor": AgricultorAgent(self, trecho_id),
+                "poder_publico": PoderPublicoAgent(self, trecho_id, fiscaliza_em_serio=fiscaliza_em_serio),
+                "industria": IndustriaAgent(
+                    self,
+                    trecho_id,
+                    crescimento_mensal=crescimento_mensal_industria,
+                    reducao_por_multa=reducao_por_multa,
+                    teto_fator_carga=teto_fator_carga_industria,
+                ),
+                "agricultor": AgricultorAgent(self, trecho_id, reducao=reducao_agricola, piso_fator=piso_fator_difusa),
                 "concessionaria": ConcessionariaAgent(self, trecho_id),
             }
 

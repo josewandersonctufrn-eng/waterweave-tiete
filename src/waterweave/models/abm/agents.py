@@ -50,40 +50,75 @@ class ComiteBaciaAgent(TrechoAgentBase):
 
 
 class PoderPublicoAgent(TrechoAgentBase):
-    """Fiscaliza e multa quando o estado ecológico está crítico — sinaliza a Indústria no mesmo passo."""
+    """Fiscaliza e multa quando o estado ecológico está ruim o bastante — sinaliza a Indústria no mesmo passo.
+
+    `fiscaliza_em_serio` permite que cenários de fiscalização mais rígida ajam
+    já no status "serious", em vez de esperar o rio chegar a "critical" —
+    alavanca exposta ao usuário na página de Cenários Futuros.
+    """
+
+    def __init__(self, model: mesa.Model, trecho_id: str, fiscaliza_em_serio: bool = False):
+        super().__init__(model, trecho_id)
+        self.fiscaliza_em_serio = fiscaliza_em_serio
 
     def step(self) -> None:
         passo = self.ultimo_passo
         self.model.multa_aplicada_no_passo[self.trecho_id] = False
         if passo is None:
             return
-        if status_para_od(passo.od_simulado_mg_l) == "critical":
+        status = status_para_od(passo.od_simulado_mg_l)
+        gatilhos = ("critical", "serious") if self.fiscaliza_em_serio else ("critical",)
+        if status in gatilhos:
             self.model.multas_por_trecho[self.trecho_id] = self.model.multas_por_trecho.get(self.trecho_id, 0) + 1
             self.model.multa_aplicada_no_passo[self.trecho_id] = True
 
 
 class IndustriaAgent(TrechoAgentBase):
-    """Cresce a carga lançada gradualmente; reduz quando multada no mesmo passo (investimento forçado em tratamento)."""
+    """Cresce a carga lançada gradualmente; reduz quando multada no mesmo passo (investimento forçado em tratamento).
 
-    CRESCIMENTO_MENSAL = 1.01
-    REDUCAO_POR_MULTA = 0.85
-    TETO_FATOR_CARGA = 2.0
+    Os três parâmetros abaixo eram constantes fixas; viraram configuráveis
+    por trecho/cenário para a página de Cenários Futuros, onde
+    `crescimento_mensal` e `teto_fator_carga` respondem ao slider de
+    "investimento em saneamento/tratamento" e `reducao_por_multa` ao slider
+    de "rigor da fiscalização".
+    """
+
+    def __init__(
+        self,
+        model: mesa.Model,
+        trecho_id: str,
+        crescimento_mensal: float = 1.01,
+        reducao_por_multa: float = 0.85,
+        teto_fator_carga: float = 2.0,
+    ):
+        super().__init__(model, trecho_id)
+        self.crescimento_mensal = crescimento_mensal
+        self.reducao_por_multa = reducao_por_multa
+        self.teto_fator_carga = teto_fator_carga
 
     def step(self) -> None:
         parametros = self.parametros
         if self.model.multa_aplicada_no_passo.get(self.trecho_id, False):
-            parametros.fator_carga_industria *= self.REDUCAO_POR_MULTA
+            parametros.fator_carga_industria *= self.reducao_por_multa
         else:
             parametros.fator_carga_industria = min(
-                self.TETO_FATOR_CARGA, parametros.fator_carga_industria * self.CRESCIMENTO_MENSAL
+                self.teto_fator_carga, parametros.fator_carga_industria * self.crescimento_mensal
             )
 
 
 class AgricultorAgent(TrechoAgentBase):
-    """Reduz uso de agroquímicos (carga difusa) quando o IQA está ruim e há pressão regulatória no cenário."""
+    """Reduz uso de agroquímicos (carga difusa) quando o IQA está ruim e há pressão regulatória no cenário.
 
-    REDUCAO = 0.95
-    PISO_FATOR = 0.5
+    `reducao` e `piso_fator` eram constantes fixas; viraram configuráveis
+    para o slider de "controle de agrotóxicos/poluição difusa" da página de
+    Cenários Futuros — quanto mais rigoroso o controle, menor `reducao`
+    (corta mais por passo) e menor `piso_fator` (permite reduzir mais).
+    """
+
+    def __init__(self, model: mesa.Model, trecho_id: str, reducao: float = 0.95, piso_fator: float = 0.5):
+        super().__init__(model, trecho_id)
+        self.reducao = reducao
+        self.piso_fator = piso_fator
 
     def step(self) -> None:
         passo = self.ultimo_passo
@@ -91,7 +126,7 @@ class AgricultorAgent(TrechoAgentBase):
             return
         if status_para_iqa(passo.iqa_simulado) in ("critical", "serious"):
             parametros = self.parametros
-            parametros.fator_carga_difusa = max(self.PISO_FATOR, parametros.fator_carga_difusa * self.REDUCAO)
+            parametros.fator_carga_difusa = max(self.piso_fator, parametros.fator_carga_difusa * self.reducao)
 
 
 class ConcessionariaAgent(TrechoAgentBase):

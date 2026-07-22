@@ -74,3 +74,34 @@ def rodar_cenario(cenario_id: str, trechos: list[str], horizonte_meses: int) -> 
             }
         )
     return pd.DataFrame(linhas)
+
+
+def rodar_cenario_customizado(
+    parametros_modelo: dict, trechos: list[str], horizonte_meses: int, seed: int = 42
+) -> pd.DataFrame:
+    """Roda `RioTieteModel` com parâmetros arbitrários (não só os `CENARIOS` pré-definidos)
+    e retorna a trajetória MÊS A MÊS completa (não só o estado final).
+
+    Usada pela página "Cenários Futuros", onde o usuário define os parâmetros
+    via sliders em vez de escolher entre os 3 cenários fixos de
+    `CENARIOS`/`PARAMETROS_CENARIO` — `rodar_cenario` continua servindo
+    exclusivamente `3_Comparativo_Cenarios.py`.
+    """
+    modelo = RioTieteModel(trechos, seed=seed, **parametros_modelo)
+    modelo.run_horizonte(horizonte_meses)
+
+    linhas = [
+        {
+            "trecho_id": passo.trecho_id,
+            "mes_data": passo.mes_data,
+            "ano_relativo": i // (12 * len(trechos)) + 1,
+            "vazao_m3s_medio": passo.vazao_simulada_m3s,
+            "iqa": passo.iqa_simulado,
+            "od_mg_l": passo.od_simulado_mg_l,
+            "dbo_mg_l": passo.dbo_simulado_mg_l,
+        }
+        for i, passo in enumerate(modelo.historico)
+    ]
+    tabela = pd.DataFrame(linhas)
+    tabela["multas_acumuladas"] = tabela["trecho_id"].map(modelo.multas_por_trecho)
+    return tabela
