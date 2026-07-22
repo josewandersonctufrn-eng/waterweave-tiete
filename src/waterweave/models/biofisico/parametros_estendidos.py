@@ -5,9 +5,12 @@ Este módulo estende a simulação para os demais parâmetros que a análise de
 poluição do Tietê identificou como relevantes (ver docs/Analise_Poluicao_Rio_Tiete.docx):
 
   Físicos:    Turbidez, Temperatura da Água, Sólidos Totais
-  Químicos:   pH, Fósforo Total, Nitrogênio (amoniacal + nitrato)
+  Químicos:   pH, Fósforo Total, Nitrogênio (amoniacal + nitrato), Metais
+              Pesados e Tóxicos (índice composto — ver ANCORA_METAIS_TOXICOS_INDICE)
   Biológicos: E. coli (sucessora de Coliformes Termotolerantes desde a
-              CONAMA 430/2011 — mesmo indicador de contaminação fecal)
+              CONAMA 430/2011), Índice Biótico (proxy ilustrativo de
+              macroinvertebrados/peixes sensíveis, sem dado real de
+              biomonitoramento no projeto)
 
 Cada parâmetro usa a MESMA lógica de ancoragem em dado real já empregada por
 `hybrid_bridge.carga_base_trecho_kg_dia`: um valor-base é fixado a partir da
@@ -40,6 +43,15 @@ ANCORA_FOSFORO_MG_L = {"alto_tiete": 1.08, "medio_tiete": 0.76, "baixo_tiete": 0
 ANCORA_NITROGENIO_MG_L = {"alto_tiete": 9.44, "medio_tiete": 9.53, "baixo_tiete": 0.80}  # amoniacal + nitrato
 ANCORA_ECOLI_NMP_100ML = {"alto_tiete": 1_091_191.0, "medio_tiete": 17_395.0, "baixo_tiete": 6.8}
 
+# Índice composto (0-100, maior = pior) de Metais Pesados e Tóxicos (chumbo,
+# mercúrio, agrotóxicos) — NÃO back-calculado de uma única substância medida
+# (o painel real tem ~10 metais + orgânicos com magnitudes/unidades distintas),
+# e sim um julgamento documentado que reflete o achado da análise de poluição:
+# Alto Tietê carrega passivo industrial histórico (metais) mesmo com trajetória
+# real de queda; Médio Tietê é dominado por agrotóxicos agrícolas; Baixo Tietê
+# é o mais preservado. Ver docs/Analise_Poluicao_Rio_Tiete.docx, seções 3 e 6.
+ANCORA_METAIS_TOXICOS_INDICE = {"alto_tiete": 55.0, "medio_tiete": 35.0, "baixo_tiete": 12.0}
+
 # Fração da carga de nutrientes/patógenos atribuída a fonte industrial/doméstica
 # (esgoto) vs. difusa/agrícola (fertilizante) — mesma lógica de
 # `hybrid_bridge.FRACAO_CARGA_INDUSTRIAL/DIFUSA`, com pesos ajustados: E. coli é
@@ -61,6 +73,8 @@ class ParametrosEstendidos:
     fosforo_mg_l: float
     nitrogenio_mg_l: float
     e_coli_nmp_100ml: float
+    metais_toxicos_indice: float
+    indice_biotico: float
 
 
 def carga_base_kg_dia(ancora_concentracao_mg_l: float, vazao_media_historica_m3s: float) -> float:
@@ -84,6 +98,7 @@ def simular_parametros_estendidos(
     vazao_diluicao_m3s: float,
     indice_escoamento_mm: float,
     dbo_simulado_mg_l: float,
+    od_simulado_mg_l: float,
     fator_clima: float,
     carga_base_fosforo_kg_dia: float,
     carga_base_nitrogenio_kg_dia: float,
@@ -121,6 +136,22 @@ def simular_parametros_estendidos(
     # apenas o cenário climático (mais seco/quente com `fator_clima` menor).
     temperatura = ANCORA_TEMPERATURA_C[trecho_id] + 3.0 * (1.0 - fator_clima)
 
+    # Metais e tóxicos: passivo industrial (metais) + agrotóxicos (difusa).
+    metais_toxicos = ANCORA_METAIS_TOXICOS_INDICE[trecho_id] * (
+        0.6 * fator_carga_industria + 0.4 * fator_carga_difusa
+    )
+    metais_toxicos = max(0.0, min(100.0, metais_toxicos))
+
+    # Índice biótico (macroinvertebrados/peixes sensíveis): proxy ilustrativo —
+    # não há dado real de biomonitoramento no projeto — combinando OD (mais
+    # peso), turbidez e toxicidade, seguindo a lógica de índices bióticos reais
+    # (tipo BMWP simplificado): mais OD e menos turbidez/toxinas -> mais vida
+    # sensível presente.
+    od_normalizado = max(0.0, min(100.0, (od_simulado_mg_l / 8.0) * 100.0))
+    turbidez_normalizada = max(0.0, min(100.0, (turbidez / 60.0) * 100.0))
+    indice_biotico = 0.5 * od_normalizado + 0.25 * (100.0 - turbidez_normalizada) + 0.25 * (100.0 - metais_toxicos)
+    indice_biotico = max(0.0, min(100.0, indice_biotico))
+
     return ParametrosEstendidos(
         turbidez_ntu=turbidez,
         solidos_totais_mg_l=solidos_totais,
@@ -129,4 +160,6 @@ def simular_parametros_estendidos(
         fosforo_mg_l=fosforo,
         nitrogenio_mg_l=nitrogenio,
         e_coli_nmp_100ml=e_coli,
+        metais_toxicos_indice=metais_toxicos,
+        indice_biotico=indice_biotico,
     )

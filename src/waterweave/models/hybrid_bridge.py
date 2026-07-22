@@ -81,6 +81,8 @@ class PassoHibrido:
     fosforo_mg_l: float
     nitrogenio_mg_l: float
     e_coli_nmp_100ml: float
+    metais_toxicos_indice: float
+    indice_biotico: float
 
 
 @lru_cache(maxsize=None)
@@ -190,6 +192,7 @@ def executar_passo(
         vazao_diluicao_m3s=vazao_diluicao,
         indice_escoamento_mm=novo_estado_hidrologico.indice_escoamento_mm,
         dbo_simulado_mg_l=dbo,
+        od_simulado_mg_l=od,
         fator_clima=fator_clima,
         carga_base_fosforo_kg_dia=carga_base_fosforo_kg_dia(trecho_id),
         carga_base_nitrogenio_kg_dia=carga_base_nitrogenio_kg_dia(trecho_id),
@@ -211,4 +214,6 @@ def executar_passo(
         fosforo_mg_l=estendidos.fosforo_mg_l,
         nitrogenio_mg_l=estendidos.nitrogenio_mg_l,
         e_coli_nmp_100ml=estendidos.e_coli_nmp_100ml,
+        metais_toxicos_indice=estendidos.metais_toxicos_indice,
+        indice_biotico=estendidos.indice_biotico,
     )

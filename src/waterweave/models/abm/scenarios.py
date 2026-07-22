@@ -106,6 +106,8 @@ def rodar_cenario_customizado(
             "fosforo_mg_l": passo.fosforo_mg_l,
             "nitrogenio_mg_l": passo.nitrogenio_mg_l,
             "e_coli_nmp_100ml": passo.e_coli_nmp_100ml,
+            "metais_toxicos_indice": passo.metais_toxicos_indice,
+            "indice_biotico": passo.indice_biotico,
         }
         for i, passo in enumerate(modelo.historico)
     ]
