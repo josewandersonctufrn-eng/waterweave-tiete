@@ -187,6 +187,40 @@ _T: dict[str, dict[str, str]] = {
         "es": "_Nota de procedencia: los indicadores de esta sección provienen de una serie simulada (proxy histórico), no de telemetría directa — ver `ingestion.bronze_qualidade_solo`._",
     },
 
+    # ---- pdf_generator.py — Relatório Automático em PDF, modelo Resumido (Opção A) --------
+    "pdf.a.titulo_pdf": {"pt": "Relatório de Qualidade da Água — {trecho} ({ano})", "en": "Water Quality Report — {trecho} ({ano})", "fr": "Rapport de Qualité de l'Eau — {trecho} ({ano})", "es": "Informe de Calidad del Agua — {trecho} ({ano})"},
+    "pdf.a.titulo_pdf_todos": {"pt": "Relatório de Qualidade da Água — Todos os Trechos ({ano})", "en": "Water Quality Report — All Stretches ({ano})", "fr": "Rapport de Qualité de l'Eau — Tous les Tronçons ({ano})", "es": "Informe de Calidad del Agua — Todos los Tramos ({ano})"},
+    "pdf.a.data_emissao": {"pt": "Data de emissão", "en": "Issue date", "fr": "Date d'émission", "es": "Fecha de emisión"},
+    "pdf.a.local": {"pt": "Local", "en": "Location", "fr": "Lieu", "es": "Lugar"},
+    "pdf.a.local_prefixo": {"pt": "Bacia do Rio Tietê", "en": "Tietê River Basin", "fr": "Bassin du Fleuve Tietê", "es": "Cuenca del Río Tietê"},
+    "pdf.a.autor": {"pt": "Autor/Responsável", "en": "Author/Responsible party", "fr": "Auteur/Responsable", "es": "Autor/Responsable"},
+    "pdf.a.autor_valor": {"pt": "Sistema WaterWeave-Tietê (geração automatizada)", "en": "WaterWeave-Tietê System (automated generation)", "fr": "Système WaterWeave-Tietê (génération automatisée)", "es": "Sistema WaterWeave-Tietê (generación automatizada)"},
+    "pdf.a.objetivo_titulo": {"pt": "Objetivo", "en": "Objective", "fr": "Objectif", "es": "Objetivo"},
+    "pdf.a.objetivo_texto": {
+        "pt": "Apresentar, de forma direta e objetiva, o estado atual da qualidade da água do trecho {trecho} do Rio Tietê no ano de {ano}, com base na simulação hidrobiogeoquímica do sistema WaterWeave-Tietê.",
+        "en": "Present, directly and objectively, the current water quality status of the {trecho} stretch of the Tietê River in {ano}, based on the WaterWeave-Tietê system's hydro-biogeochemical simulation.",
+        "fr": "Présenter, de manière directe et objective, l'état actuel de la qualité de l'eau du tronçon {trecho} du fleuve Tietê en {ano}, sur la base de la simulation hydro-biogéochimique du système WaterWeave-Tietê.",
+        "es": "Presentar, de forma directa y objetiva, el estado actual de la calidad del agua del tramo {trecho} del Río Tietê en el año {ano}, con base en la simulación hidrobiogeoquímica del sistema WaterWeave-Tietê.",
+    },
+    "pdf.a.objetivo_texto_todos": {
+        "pt": "Apresentar, de forma direta e objetiva, o estado atual da qualidade da água de todos os trechos monitorados do Rio Tietê no ano de {ano}, com base na simulação hidrobiogeoquímica do sistema WaterWeave-Tietê.",
+        "en": "Present, directly and objectively, the current water quality status of all monitored stretches of the Tietê River in {ano}, based on the WaterWeave-Tietê system's hydro-biogeochemical simulation.",
+        "fr": "Présenter, de manière directe et objective, l'état actuel de la qualité de l'eau de tous les tronçons surveillés du fleuve Tietê en {ano}, sur la base de la simulation hydro-biogéochimique du système WaterWeave-Tietê.",
+        "es": "Presentar, de forma directa y objetiva, el estado actual de la calidad del agua de todos los tramos monitoreados del Río Tietê en el año {ano}, con base en la simulación hidrobiogeoquímica del sistema WaterWeave-Tietê.",
+    },
+    "pdf.a.resumo_atividades_titulo": {"pt": "Resumo das Atividades", "en": "Summary of Activities", "fr": "Résumé des Activités", "es": "Resumen de las Actividades"},
+    "pdf.a.resumo_atividades_itens": {
+        "pt": "- Consulta à série histórica simulada (modelo baseado em agentes + balanço hídrico + Streeter-Phelps) do trecho.\n- Cálculo do Índice de Qualidade da Água (IQA), do Oxigênio Dissolvido (OD) e da Demanda Bioquímica de Oxigênio (DBO).\n- Comparação com a média histórica da série e com a tendência dos últimos {janela} anos.",
+        "en": "- Consultation of the simulated historical series (agent-based model + water balance + Streeter-Phelps) for the stretch.\n- Calculation of the Water Quality Index (WQI), Dissolved Oxygen (DO) and Biochemical Oxygen Demand (BOD).\n- Comparison against the series' historical average and the trend over the last {janela} years.",
+        "fr": "- Consultation de la série historique simulée (modèle multi-agents + bilan hydrique + Streeter-Phelps) du tronçon.\n- Calcul de l'Indice de Qualité de l'Eau (IQE), de l'Oxygène Dissous (OD) et de la Demande Biochimique en Oxygène (DBO).\n- Comparaison avec la moyenne historique de la série et la tendance des {janela} dernières années.",
+        "es": "- Consulta a la serie histórica simulada (modelo basado en agentes + balance hídrico + Streeter-Phelps) del tramo.\n- Cálculo del Índice de Calidad del Agua (ICA), el Oxígeno Disuelto (OD) y la Demanda Bioquímica de Oxígeno (DBO).\n- Comparación con el promedio histórico de la serie y con la tendencia de los últimos {janela} años.",
+    },
+    "pdf.a.resultados_titulo": {"pt": "Resultados Principais", "en": "Main Results", "fr": "Résultats Principaux", "es": "Resultados Principales"},
+    "pdf.a.assinatura_titulo": {"pt": "Assinatura", "en": "Signature", "fr": "Signature", "es": "Firma"},
+    "pdf.a.assinatura_responsavel": {"pt": "Responsável técnico:", "en": "Technical officer:", "fr": "Responsable technique :", "es": "Responsable técnico:"},
+    "pdf.a.assinatura_cargo": {"pt": "Cargo/Função:", "en": "Position/Role:", "fr": "Poste/Fonction :", "es": "Cargo/Función:"},
+    "pdf.a.assinatura_visto": {"pt": "Visto:", "en": "Approved by:", "fr": "Visa :", "es": "Visto bueno:"},
+
     # ---- Cenários Futuros — cenario_narrativo.py (relatório PDF ABNT) --------------------
     "cn.titulo": {"pt": "Cenário simulado — {trecho}, {horizonte} anos à frente", "en": "Simulated scenario — {trecho}, {horizonte} years ahead", "fr": "Scénario simulé — {trecho}, {horizonte} ans plus tard", "es": "Escenario simulado — {trecho}, {horizonte} años más adelante"},
     "cn.sec.config": {"pt": "Configuração Escolhida", "en": "Chosen Configuration", "fr": "Configuration Choisie", "es": "Configuración Elegida"},
@@ -295,6 +329,123 @@ _T: dict[str, dict[str, str]] = {
         "en": "Simulation via agent-based model (Mesa) + water balance + Streeter-Phelps, with extended submodels anchored to real 2012-2024 CETESB averages. The WQI is a simplified proxy for DO/BOD; the Biotic Index and the Metals/Toxics index are illustrative proxies combining the other simulated parameters, not direct field measurements. Each river stretch is simulated independently, with no load propagation between stretches.",
         "fr": "Simulation via un modèle multi-agents (Mesa) + bilan hydrique + Streeter-Phelps, avec des sous-modèles étendus ancrés sur des moyennes réelles CETESB 2012-2024. L'IQE est un proxy simplifié de l'OD/DBO ; l'Indice Biotique et l'indice Métaux/Toxiques sont des proxys illustratifs combinant les autres paramètres simulés, pas des mesures directes de terrain. Chaque tronçon du fleuve est simulé indépendamment, sans propagation de charge entre les tronçons.",
         "es": "Simulación vía modelo basado en agentes (Mesa) + balance hídrico + Streeter-Phelps, con submodelos extendidos anclados en promedios reales 2012-2024 de la CETESB. El ICA es un proxy simplificado de OD/DBO; el Índice Biótico y el índice de Metales/Tóxicos son proxies ilustrativos que combinan los demás parámetros simulados, no mediciones directas de campo. Cada tramo del río se simula de forma independiente, sin propagación de carga entre tramos.",
+    },
+
+    # ---- cenario_narrativo.py / pdf_generator.py — Relatório de Cenário, Modelo Completo
+    # ---- (Opção B / NBR 10719): capa, folha de rosto, resumo, sumário, introdução, ----------
+    # ---- metodologia, desenvolvimento, resultados e discussão, conclusão, referências ------
+    "cn.b.sec.resumo": {"pt": "Resumo", "en": "Abstract", "fr": "Résumé", "es": "Resumen"},
+    "cn.b.palavras_chave_label": {"pt": "Palavras-chave:", "en": "Keywords:", "fr": "Mots-clés :", "es": "Palabras clave:"},
+    "cn.b.palavras_chave_lista": {
+        "pt": "Qualidade da água; Rio Tietê; Modelagem baseada em agentes; Simulação ambiental; Índice de Qualidade da Água.",
+        "en": "Water quality; Tietê River; Agent-based modeling; Environmental simulation; Water Quality Index.",
+        "fr": "Qualité de l'eau ; Fleuve Tietê ; Modélisation multi-agents ; Simulation environnementale ; Indice de Qualité de l'Eau.",
+        "es": "Calidad del agua; Río Tietê; Modelado basado en agentes; Simulación ambiental; Índice de Calidad del Agua.",
+    },
+    "cn.b.sec.sumario": {"pt": "Sumário", "en": "Contents", "fr": "Sommaire", "es": "Sumario"},
+    "cn.b.sec.introducao": {"pt": "Introdução", "en": "Introduction", "fr": "Introduction", "es": "Introducción"},
+    "cn.b.sec.metodologia": {"pt": "Metodologia", "en": "Methodology", "fr": "Méthodologie", "es": "Metodología"},
+    "cn.b.sec.desenvolvimento": {"pt": "Desenvolvimento", "en": "Development", "fr": "Développement", "es": "Desarrollo"},
+    "cn.b.sec.resultados_discussao": {"pt": "Resultados e Discussão", "en": "Results and Discussion", "fr": "Résultats et Discussion", "es": "Resultados y Discusión"},
+    "cn.b.sec.conclusao": {"pt": "Conclusão", "en": "Conclusion", "fr": "Conclusion", "es": "Conclusión"},
+    "cn.b.sec.referencias": {"pt": "Referências Bibliográficas", "en": "Bibliographic References", "fr": "Références Bibliographiques", "es": "Referencias Bibliográficas"},
+    "cn.b.sec.anexos": {"pt": "Anexos", "en": "Appendices", "fr": "Annexes", "es": "Anexos"},
+
+    "cn.b.folha_rosto.natureza_label": {"pt": "Natureza do trabalho:", "en": "Nature of the work:", "fr": "Nature du travail :", "es": "Naturaleza del trabajo:"},
+    "cn.b.folha_rosto.natureza_texto": {
+        "pt": "Relatório técnico-científico gerado por simulação computacional.",
+        "en": "Technical-scientific report generated by computational simulation.",
+        "fr": "Rapport technico-scientifique généré par simulation informatique.",
+        "es": "Informe técnico-científico generado por simulación computacional.",
+    },
+    "cn.b.folha_rosto.instituicao_label": {"pt": "Instituição/Sistema:", "en": "Institution/System:", "fr": "Institution/Système :", "es": "Institución/Sistema:"},
+    "cn.b.folha_rosto.objetivo_label": {"pt": "Objetivo do relatório:", "en": "Report objective:", "fr": "Objectif du rapport :", "es": "Objetivo del informe:"},
+
+    "cn.b.resumo_texto": {
+        "pt": "Este relatório documenta uma simulação computacional da qualidade da água do trecho {trecho} do Rio Tietê, projetada por um horizonte de {horizonte} anos, com o objetivo de avaliar o impacto de diferentes níveis de esforço de controle da poluição (sedimentos/erosão, esgoto/efluentes, fertilizantes/agrotóxicos) e da vazão ecológica mínima reservada sobre a recuperação do corpo hídrico. A simulação combina um modelo baseado em agentes (Mesa), balanço hídrico simplificado e a formulação clássica de Streeter-Phelps, complementados por submodelos de Turbidez, Sólidos Totais, pH, Nutrientes, Metais/Tóxicos, E. coli e Índice Biótico, todos ancorados em médias reais da CETESB no período 2012-2024. Na configuração escolhida, o Índice de Qualidade da Água (ICA) simulado {tend_iqa_resumo}, terminando o horizonte em situação **{status}**; {comparacao_resumo}. Conclui-se que o cenário simulado permite estimar, de forma ilustrativa e não calibrada, a magnitude do efeito de cada frente de controle sobre a recuperação do rio, servindo de subsídio para a priorização de investimentos na bacia.",
+        "en": "This report documents a computational simulation of water quality for the {trecho} stretch of the Tietê River, projected over a {horizonte}-year horizon, aiming to assess the impact of different levels of pollution-control effort (sediment/erosion, sewage/effluents, fertilizers/pesticides) and of the minimum ecological flow reserved on the recovery of the water body. The simulation combines an agent-based model (Mesa), a simplified water balance and the classic Streeter-Phelps formulation, complemented by submodels for Turbidity, Total Solids, pH, Nutrients, Metals/Toxics, E. coli and the Biotic Index, all anchored to real 2012-2024 CETESB averages. Under the chosen configuration, the simulated Water Quality Index (WQI) {tend_iqa_resumo}, ending the horizon in **{status}** condition; {comparacao_resumo}. It is concluded that the simulated scenario allows estimating, in an illustrative and non-calibrated way, the magnitude of the effect of each control front on the river's recovery, providing input for prioritizing investments in the basin.",
+        "fr": "Ce rapport documente une simulation informatique de la qualité de l'eau du tronçon {trecho} du fleuve Tietê, projetée sur un horizon de {horizonte} ans, dans le but d'évaluer l'impact de différents niveaux d'effort de contrôle de la pollution (sédiments/érosion, eaux usées/effluents, engrais/pesticides) et du débit écologique minimal réservé sur la récupération du corps d'eau. La simulation combine un modèle multi-agents (Mesa), un bilan hydrique simplifié et la formulation classique de Streeter-Phelps, complétés par des sous-modèles de Turbidité, Solides Totaux, pH, Nutriments, Métaux/Toxiques, E. coli et Indice Biotique, tous ancrés sur des moyennes réelles CETESB 2012-2024. Dans la configuration choisie, l'Indice de Qualité de l'Eau (IQE) simulé {tend_iqa_resumo}, terminant l'horizon en situation **{status}** ; {comparacao_resumo}. Il est conclu que le scénario simulé permet d'estimer, de manière illustrative et non calibrée, l'ampleur de l'effet de chaque front de contrôle sur la récupération du fleuve, fournissant un appui à la priorisation des investissements dans le bassin.",
+        "es": "Este informe documenta una simulación computacional de la calidad del agua del tramo {trecho} del Río Tietê, proyectada en un horizonte de {horizonte} años, con el objetivo de evaluar el impacto de diferentes niveles de esfuerzo de control de la contaminación (sedimentos/erosión, aguas residuales/efluentes, fertilizantes/agroquímicos) y del caudal ecológico mínimo reservado sobre la recuperación del cuerpo hídrico. La simulación combina un modelo basado en agentes (Mesa), un balance hídrico simplificado y la formulación clásica de Streeter-Phelps, complementados por submodelos de Turbidez, Sólidos Totales, pH, Nutrientes, Metales/Tóxicos, E. coli e Índice Biótico, todos anclados en promedios reales de la CETESB en el período 2012-2024. En la configuración elegida, el Índice de Calidad del Agua (ICA) simulado {tend_iqa_resumo}, terminando el horizonte en situación **{status}**; {comparacao_resumo}. Se concluye que el escenario simulado permite estimar, de forma ilustrativa y no calibrada, la magnitud del efecto de cada frente de control sobre la recuperación del río, sirviendo de insumo para la priorización de inversiones en la cuenca.",
+    },
+    "cn.b.resumo_comparacao_melhor": {
+        "pt": "esse resultado supera em {diff:.0f} pontos de ICA o cenário de inação no mesmo horizonte",
+        "en": "this result exceeds the inaction scenario by {diff:.0f} WQI points over the same horizon",
+        "fr": "ce résultat dépasse de {diff:.0f} points d'IQE le scénario d'inaction sur le même horizon",
+        "es": "este resultado supera en {diff:.0f} puntos de ICA al escenario de inacción en el mismo horizonte",
+    },
+    "cn.b.resumo_comparacao_pior": {
+        "pt": "esse resultado fica {diff:.0f} pontos de ICA abaixo do cenário de inação no mesmo horizonte",
+        "en": "this result falls {diff:.0f} WQI points short of the inaction scenario over the same horizon",
+        "fr": "ce résultat reste {diff:.0f} points d'IQE en dessous du scénario d'inaction sur le même horizon",
+        "es": "este resultado queda {diff:.0f} puntos de ICA por debajo del escenario de inacción en el mismo horizonte",
+    },
+    "cn.b.resumo_comparacao_proximo": {
+        "pt": "esse resultado permanece próximo do cenário de inação, sem uma mudança clara no horizonte simulado",
+        "en": "this result remains close to the inaction scenario, without a clear change over the simulated horizon",
+        "fr": "ce résultat reste proche du scénario d'inaction, sans changement net sur l'horizon simulé",
+        "es": "este resultado permanece cerca del escenario de inacción, sin un cambio claro en el horizonte simulado",
+    },
+
+    "cn.b.introducao_contexto": {
+        "pt": "O Rio Tietê atravessa a Região Metropolitana de São Paulo e áreas agrícolas e industriais ao longo de seus três grandes trechos (Alto, Médio e Baixo Tietê), sofrendo pressões distintas de poluição em cada segmento. Compreender como diferentes níveis de esforço de controle afetam a trajetória futura da qualidade da água é essencial para orientar decisões de investimento e políticas de gestão da bacia.",
+        "en": "The Tietê River crosses the São Paulo Metropolitan Region and agricultural and industrial areas along its three major stretches (Upper, Middle and Lower Tietê), facing distinct pollution pressures in each segment. Understanding how different levels of control effort affect the future trajectory of water quality is essential for guiding investment decisions and basin management policies.",
+        "fr": "Le fleuve Tietê traverse la région métropolitaine de São Paulo ainsi que des zones agricoles et industrielles le long de ses trois grands tronçons (Haut, Moyen et Bas Tietê), subissant des pressions de pollution distinctes dans chaque segment. Comprendre comment différents niveaux d'effort de contrôle affectent la trajectoire future de la qualité de l'eau est essentiel pour orienter les décisions d'investissement et les politiques de gestion du bassin.",
+        "es": "El Río Tietê atraviesa la Región Metropolitana de São Paulo y áreas agrícolas e industriales a lo largo de sus tres grandes tramos (Alto, Medio y Bajo Tietê), enfrentando presiones de contaminación distintas en cada segmento. Comprender cómo diferentes niveles de esfuerzo de control afectan la trayectoria futura de la calidad del agua es esencial para orientar decisiones de inversión y políticas de gestión de la cuenca.",
+    },
+    "cn.b.objetivo_geral_label": {"pt": "Objetivo geral:", "en": "General objective:", "fr": "Objectif général :", "es": "Objetivo general:"},
+    "cn.b.objetivo_geral_texto": {
+        "pt": "Simular e comparar a evolução da qualidade da água do trecho {trecho} do Rio Tietê ao longo de um horizonte de {horizonte} anos, sob a configuração de controle escolhida, frente a um cenário de inação.",
+        "en": "Simulate and compare the evolution of water quality for the {trecho} stretch of the Tietê River over a {horizonte}-year horizon, under the chosen control configuration, against an inaction scenario.",
+        "fr": "Simuler et comparer l'évolution de la qualité de l'eau du tronçon {trecho} du fleuve Tietê sur un horizon de {horizonte} ans, selon la configuration de contrôle choisie, face à un scénario d'inaction.",
+        "es": "Simular y comparar la evolución de la calidad del agua del tramo {trecho} del Río Tietê a lo largo de un horizonte de {horizonte} años, bajo la configuración de control elegida, frente a un escenario de inacción.",
+    },
+    "cn.b.objetivos_especificos_label": {"pt": "Objetivos específicos:", "en": "Specific objectives:", "fr": "Objectifs spécifiques :", "es": "Objetivos específicos:"},
+    "cn.b.objetivos_especificos_itens": {
+        "pt": "- Estimar a trajetória do Índice de Qualidade da Água (ICA) e dos parâmetros físicos, químicos e biológicos associados.\n- Comparar o cenário controlado com um cenário de inação (patamar fixo pessimista).\n- Identificar as implicações práticas do resultado projetado para o uso da água e a vida aquática.",
+        "en": "- Estimate the trajectory of the Water Quality Index (WQI) and the associated physical, chemical and biological parameters.\n- Compare the controlled scenario with an inaction scenario (fixed, pessimistic baseline).\n- Identify the practical implications of the projected result for water use and aquatic life.",
+        "fr": "- Estimer la trajectoire de l'Indice de Qualité de l'Eau (IQE) et des paramètres physiques, chimiques et biologiques associés.\n- Comparer le scénario contrôlé à un scénario d'inaction (niveau fixe pessimiste).\n- Identifier les implications pratiques du résultat projeté pour l'usage de l'eau et la vie aquatique.",
+        "es": "- Estimar la trayectoria del Índice de Calidad del Agua (ICA) y de los parámetros físicos, químicos y biológicos asociados.\n- Comparar el escenario controlado con un escenario de inacción (nivel fijo pesimista).\n- Identificar las implicaciones prácticas del resultado proyectado para el uso del agua y la vida acuática.",
+    },
+
+    "cn.b.metodologia_intro": {
+        "pt": "A simulação é conduzida pelo motor de modelagem do sistema WaterWeave-Tietê, descrito a seguir.",
+        "en": "The simulation is driven by the WaterWeave-Tietê system's modeling engine, described below.",
+        "fr": "La simulation est pilotée par le moteur de modélisation du système WaterWeave-Tietê, décrit ci-dessous.",
+        "es": "La simulación es conducida por el motor de modelado del sistema WaterWeave-Tietê, descrito a continuación.",
+    },
+
+    "cn.b.desenvolvimento_intro": {
+        "pt": "Nesta seção, apresenta-se a configuração de controle escolhida para o trecho {trecho}, seguida da trajetória simulada do Índice de Qualidade da Água (Gráfico 1) e dos parâmetros ao final do horizonte (Tabela 1).",
+        "en": "This section presents the chosen control configuration for the {trecho} stretch, followed by the simulated trajectory of the Water Quality Index (Chart 1) and the parameters at the end of the horizon (Table 1).",
+        "fr": "Cette section présente la configuration de contrôle choisie pour le tronçon {trecho}, suivie de la trajectoire simulée de l'Indice de Qualité de l'Eau (Graphique 1) et des paramètres à la fin de l'horizon (Tableau 1).",
+        "es": "Esta sección presenta la configuración de control elegida para el tramo {trecho}, seguida de la trayectoria simulada del Índice de Calidad del Agua (Gráfico 1) y de los parámetros al final del horizonte (Tabla 1).",
+    },
+
+    "cn.b.conclusao_atingido": {
+        "pt": "Os objetivos deste relatório foram atingidos: a simulação demonstrou, de forma quantitativa, o efeito das medidas de controle escolhidas frente à inação para o trecho {trecho}. Como limitação, destaca-se que os parâmetros estendidos (Índice Biótico, Metais/Tóxicos) são proxies ilustrativos, e a modelagem não propaga carga/vazão entre trechos do rio. Como próxima etapa, recomenda-se testar outras combinações de esforço de controle e horizontes temporais, e confrontar os resultados com séries reais de monitoramento à medida que estas se tornem disponíveis.",
+        "en": "The objectives of this report were achieved: the simulation quantitatively demonstrated the effect of the chosen control measures against inaction for the {trecho} stretch. As a limitation, it should be noted that the extended parameters (Biotic Index, Metals/Toxics) are illustrative proxies, and the model does not propagate load/flow between river stretches. As a next step, it is recommended to test other combinations of control effort and time horizons, and to compare the results with real monitoring series as they become available.",
+        "fr": "Les objectifs de ce rapport ont été atteints : la simulation a démontré, de manière quantitative, l'effet des mesures de contrôle choisies face à l'inaction pour le tronçon {trecho}. Comme limite, il convient de noter que les paramètres étendus (Indice Biotique, Métaux/Toxiques) sont des proxys illustratifs, et que la modélisation ne propage pas la charge/le débit entre les tronçons du fleuve. Comme prochaine étape, il est recommandé de tester d'autres combinaisons d'effort de contrôle et d'horizons temporels, et de confronter les résultats à des séries réelles de surveillance à mesure qu'elles deviennent disponibles.",
+        "es": "Los objetivos de este informe fueron alcanzados: la simulación demostró, de forma cuantitativa, el efecto de las medidas de control elegidas frente a la inacción para el tramo {trecho}. Como limitación, se destaca que los parámetros extendidos (Índice Biótico, Metales/Tóxicos) son proxies ilustrativos, y el modelado no propaga carga/caudal entre tramos del río. Como próxima etapa, se recomienda probar otras combinaciones de esfuerzo de control y horizontes temporales, y contrastar los resultados con series reales de monitoreo a medida que estén disponibles.",
+    },
+    "cn.b.conclusao_nao_atingido": {
+        "pt": "Os objetivos deste relatório foram parcialmente atingidos: a simulação não indicou um ganho claro de qualidade da água frente à inação para o trecho {trecho} na configuração escolhida, o que sugere a necessidade de aumentar o esforço de controle ou revisar as premissas do cenário climático. Como limitação, destaca-se que os parâmetros estendidos (Índice Biótico, Metais/Tóxicos) são proxies ilustrativos, e a modelagem não propaga carga/vazão entre trechos do rio. Como próxima etapa, recomenda-se testar configurações de maior esforço de controle e confrontar os resultados com séries reais de monitoramento à medida que estas se tornem disponíveis.",
+        "en": "The objectives of this report were partially achieved: the simulation did not indicate a clear water quality gain against inaction for the {trecho} stretch under the chosen configuration, which suggests the need to increase control effort or revise the climate scenario assumptions. As a limitation, it should be noted that the extended parameters (Biotic Index, Metals/Toxics) are illustrative proxies, and the model does not propagate load/flow between river stretches. As a next step, it is recommended to test configurations with greater control effort and to compare the results with real monitoring series as they become available.",
+        "fr": "Les objectifs de ce rapport ont été partiellement atteints : la simulation n'a pas indiqué de gain net de qualité de l'eau face à l'inaction pour le tronçon {trecho} dans la configuration choisie, ce qui suggère la nécessité d'augmenter l'effort de contrôle ou de revoir les hypothèses du scénario climatique. Comme limite, il convient de noter que les paramètres étendus (Indice Biotique, Métaux/Toxiques) sont des proxys illustratifs, et que la modélisation ne propage pas la charge/le débit entre les tronçons du fleuve. Comme prochaine étape, il est recommandé de tester des configurations avec un effort de contrôle plus élevé et de confronter les résultats à des séries réelles de surveillance à mesure qu'elles deviennent disponibles.",
+        "es": "Los objetivos de este informe fueron parcialmente alcanzados: la simulación no indicó una ganancia clara de calidad del agua frente a la inacción para el tramo {trecho} en la configuración elegida, lo que sugiere la necesidad de aumentar el esfuerzo de control o revisar los supuestos del escenario climático. Como limitación, se destaca que los parámetros extendidos (Índice Biótico, Metales/Tóxicos) son proxies ilustrativos, y el modelado no propaga carga/caudal entre tramos del río. Como próxima etapa, se recomienda probar configuraciones con mayor esfuerzo de control y contrastar los resultados con series reales de monitoreo a medida que estén disponibles.",
+    },
+
+    "cn.b.referencias_lista": {
+        "pt": "- CETESB — Companhia Ambiental do Estado de São Paulo. Qualidade das águas superficiais no Estado de São Paulo: base de dados de monitoramento, 2012-2024.\n- CONAMA — Conselho Nacional do Meio Ambiente. Resolução nº 357/2005 e nº 430/2011: classificação de corpos hídricos e padrões de lançamento de efluentes.\n- STREETER, H. W.; PHELPS, E. B. A Study of the Pollution and Natural Purification of the Ohio River. Washington: U.S. Public Health Service, 1925.\n- KAZIL, J.; MASAD, D.; CROOKS, A. Utilizing Python for Agent-Based Modeling: The Mesa Framework. In: Social, Cultural, and Behavioral Modeling (SBP-BRiMS), 2020.\n- ANA — Agência Nacional de Águas e Saneamento Básico. Sistema Nacional de Informações sobre Recursos Hídricos (SNIRH).",
+        "en": "- CETESB — Companhia Ambiental do Estado de São Paulo. Qualidade das águas superficiais no Estado de São Paulo: base de dados de monitoramento, 2012-2024.\n- CONAMA — Conselho Nacional do Meio Ambiente. Resolução nº 357/2005 e nº 430/2011: classificação de corpos hídricos e padrões de lançamento de efluentes.\n- STREETER, H. W.; PHELPS, E. B. A Study of the Pollution and Natural Purification of the Ohio River. Washington: U.S. Public Health Service, 1925.\n- KAZIL, J.; MASAD, D.; CROOKS, A. Utilizing Python for Agent-Based Modeling: The Mesa Framework. In: Social, Cultural, and Behavioral Modeling (SBP-BRiMS), 2020.\n- ANA — Agência Nacional de Águas e Saneamento Básico. Sistema Nacional de Informações sobre Recursos Hídricos (SNIRH).",
+        "fr": "- CETESB — Companhia Ambiental do Estado de São Paulo. Qualidade das águas superficiais no Estado de São Paulo: base de dados de monitoramento, 2012-2024.\n- CONAMA — Conselho Nacional do Meio Ambiente. Resolução nº 357/2005 e nº 430/2011: classificação de corpos hídricos e padrões de lançamento de efluentes.\n- STREETER, H. W.; PHELPS, E. B. A Study of the Pollution and Natural Purification of the Ohio River. Washington: U.S. Public Health Service, 1925.\n- KAZIL, J.; MASAD, D.; CROOKS, A. Utilizing Python for Agent-Based Modeling: The Mesa Framework. In: Social, Cultural, and Behavioral Modeling (SBP-BRiMS), 2020.\n- ANA — Agência Nacional de Águas e Saneamento Básico. Sistema Nacional de Informações sobre Recursos Hídricos (SNIRH).",
+        "es": "- CETESB — Companhia Ambiental do Estado de São Paulo. Qualidade das águas superficiais no Estado de São Paulo: base de dados de monitoramento, 2012-2024.\n- CONAMA — Conselho Nacional do Meio Ambiente. Resolução nº 357/2005 e nº 430/2011: classificação de corpos hídricos e padrões de lançamento de efluentes.\n- STREETER, H. W.; PHELPS, E. B. A Study of the Pollution and Natural Purification of the Ohio River. Washington: U.S. Public Health Service, 1925.\n- KAZIL, J.; MASAD, D.; CROOKS, A. Utilizing Python for Agent-Based Modeling: The Mesa Framework. In: Social, Cultural, and Behavioral Modeling (SBP-BRiMS), 2020.\n- ANA — Agência Nacional de Águas e Saneamento Básico. Sistema Nacional de Informações sobre Recursos Hídricos (SNIRH).",
+    },
+
+    "cn.b.anexos_texto": {
+        "pt": "Os dados brutos da série simulada (ano a ano, cenário controlado e não controlado, todos os parâmetros físicos, químicos e biológicos) podem ser consultados nas telas \"Séries Históricas\" e \"Comparativo de Cenários\" do painel WaterWeave-Tietê. A cena 3D interativa da própria página \"Cenários Futuros\" oferece uma visualização complementar desta mesma simulação.",
+        "en": "The raw data of the simulated series (year by year, controlled and uncontrolled scenarios, all physical, chemical and biological parameters) can be consulted on the \"Historical Series\" and \"Scenario Comparison\" screens of the WaterWeave-Tietê dashboard. The interactive 3D scene on the \"Future Scenarios\" page itself offers a complementary view of this same simulation.",
+        "fr": "Les données brutes de la série simulée (année par année, scénarios contrôlé et non contrôlé, tous les paramètres physiques, chimiques et biologiques) peuvent être consultées sur les écrans « Séries Historiques » et « Comparaison de Scénarios » du tableau de bord WaterWeave-Tietê. La scène 3D interactive de la page « Scénarios Futurs » elle-même offre une visualisation complémentaire de cette même simulation.",
+        "es": "Los datos brutos de la serie simulada (año a año, escenarios controlado y no controlado, todos los parámetros físicos, químicos y biológicos) pueden consultarse en las pantallas \"Series Históricas\" y \"Comparativo de Escenarios\" del panel WaterWeave-Tietê. La escena 3D interactiva de la propia página \"Escenarios Futuros\" ofrece una visualización complementaria de esta misma simulación.",
     },
 
     # ---- pdf_generator.py — legendas/tabela ABNT do relatório de cenário ------------------

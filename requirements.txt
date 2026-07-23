@@ -25,6 +25,7 @@ plotly>=5.22
 folium>=0.17
 streamlit-folium>=0.23
 fpdf2>=2.8  # export em PDF do Relatório Automático (pure-Python, sem binário de sistema)
+pyphen>=0.14  # hifenização automática do texto justificado dos PDFs (pt_BR/en/fr/es, pure-Python)
 
 # As dependências abaixo são só para desenvolvimento LOCAL (orquestração e
 # conector futuro do MapBiomas) — deliberadamente fora deste arquivo para
