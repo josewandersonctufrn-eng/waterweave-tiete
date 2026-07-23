@@ -4,15 +4,25 @@ Cena estilizada em tempo real (não fotorrealismo de VFX de longa-metragem —
 isso exigiria produção offline em Blender/Houdini + Unreal, incompatível com
 resposta ao vivo aos sliders do usuário). 100% pilotada pelos dados REAIS
 simulados pelo ABM (`models.abm.scenarios.rodar_cenario_customizado` +
-`models.biofisico.parametros_estendidos`): cor/turbidez da água, iluminação,
-partículas de sedimento/espuma/bolhas, tubulação industrial, peixes e
-vegetação respondem aos valores simulados de cada ano, não a uma animação
-solta.
+`models.biofisico.parametros_estendidos`).
+
+Mapeamento variável -> elemento visual (arquitetura do sistema):
+
+    Turbidez                         -> cor/opacidade da água (uSeverity/uTurbidez)
+    Turbidez + chuva + baixo esforço -> partículas de lama (plantação -> rio)
+    Sólidos Totais                   -> camada de assoreamento no leito
+    OD                                -> peixes (vivos, letárgicos ou de barriga p/ cima)
+    DBO/severidade + Metais           -> espuma química + filme de óleo na superfície
+    pH (distância de 7)               -> vegetação marginal murcha (+ severidade)
+    Nutrientes (Fósforo+Nitrogênio)   -> floração de algas na superfície (eutrofização)
+    Vazão (normalizada na sessão)     -> nível d'água, largura do canal, bancos de areia
+    Índice de escoamento (chuva real) -> sistema de partículas de chuva
+    Esgoto industrial/doméstico       -> 2 tubulações com despejo (indústria + residências)
 
 Uso:
     from waterweave.webapp.components.rio_3d import renderizar_html
-    html = renderizar_html(dados_por_ano, ano_min=1, ano_max=15)
-    st.components.v1.html(html, height=640, scrolling=False)
+    html = renderizar_html(dados_controlado, dados_nao_controlado, ano_min=1, ano_max=15)
+    st.components.v1.html(html, height=680, scrolling=False)
 """
 from __future__ import annotations
 
@@ -55,6 +65,10 @@ _TEMPLATE = r"""
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     color: #cfe8ff; font-size: 13px; z-index: 20; background: #0c0f14;
   }
+  #legenda {
+    position: absolute; left: 16px; bottom: 54px; color: #f2f1ee; z-index: 10; font-size: 10.5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7); opacity: 0.85; pointer-events: none; line-height: 1.5;
+  }
 </style>
 </head>
 <body>
@@ -62,6 +76,7 @@ _TEMPLATE = r"""
   <div id="carregando">Carregando cena…</div>
   <div id="painel"><div class="ano">Ano 0</div><div class="fase">—</div></div>
   <div id="metricas"></div>
+  <div id="legenda">🏭 Indústria &nbsp; 🏘️ Residências &nbsp; 🌾 Plantação &nbsp; 🌧️ Chuva</div>
   <canvas id="cena"></canvas>
   <div id="controles">
     <button id="btnPlay" title="Reproduzir/Pausar">▶</button>
@@ -91,6 +106,20 @@ function fase(iqaAtual, iqaAnterior) {
   return "Estado crítico estável";
 }
 
+// Faixas reais (ambas as séries) para normalizar vazão e chuva de forma consistente --------
+function faixa(chave) {
+  const valores = [...DADOS.controlado, ...DADOS.nao_controlado].map(l => l[chave]).filter(v => v !== undefined && v !== null);
+  return { min: Math.min(...valores), max: Math.max(...valores) };
+}
+const FAIXA_VAZAO = faixa('vazao_m3s_medio');
+const FAIXA_ESCOAMENTO = faixa('indice_escoamento_mm');
+
+function normalizar(valor, faixaObj) {
+  const amplitude = faixaObj.max - faixaObj.min;
+  if (amplitude < 1e-6) return 0.5;
+  return Math.max(0, Math.min(1, (valor - faixaObj.min) / amplitude));
+}
+
 // ---------------------------------------------------------------------------
 // Cena
 // ---------------------------------------------------------------------------
@@ -111,10 +140,10 @@ const sol = new THREE.DirectionalLight(0xffffff, 1.4);
 sol.position.set(-8, 12, 6);
 scene.add(sol);
 
-scene.fog = new THREE.FogExp2(0x9fb8c8, 0.018);
+scene.fog = new THREE.FogExp2(0x9fb8c8, 0.016);
 
 // Terreno / margens (verde -> marrom conforme severidade)
-const terrenoGeo = new THREE.PlaneGeometry(60, 34, 40, 24);
+const terrenoGeo = new THREE.PlaneGeometry(72, 40, 40, 24);
 const terrenoMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0 });
 const posAttr = terrenoGeo.attributes.position;
 const cores = new Float32Array(posAttr.count * 3);
@@ -134,9 +163,9 @@ terreno.rotation.x = -Math.PI / 2;
 terreno.position.y = -0.3;
 scene.add(terreno);
 
-// Água
+// Água (nível/largura variam com a vazão simulada — ver atualizarNivelAgua)
 const AGUA_LARGURA = 13.0;
-const aguaGeo = new THREE.PlaneGeometry(60, AGUA_LARGURA, 120, 30);
+const aguaGeo = new THREE.PlaneGeometry(66, AGUA_LARGURA, 120, 30);
 const aguaUniforms = {
   uTime: { value: 0 },
   uSeverity: { value: 0.0 },
@@ -187,26 +216,153 @@ const agua = new THREE.Mesh(aguaGeo, aguaMat);
 agua.rotation.x = -Math.PI / 2;
 scene.add(agua);
 
-// Tubulação industrial (fonte de poluição)
+// Camada de assoreamento no leito (visível através da água quando Sólidos Totais sobem)
+const sedimentoLeitoGeo = new THREE.PlaneGeometry(66, AGUA_LARGURA - 1, 1, 1);
+const sedimentoLeitoMat = new THREE.MeshBasicMaterial({ color: 0x4a3a26, transparent: true, opacity: 0.0 });
+const sedimentoLeito = new THREE.Mesh(sedimentoLeitoGeo, sedimentoLeitoMat);
+sedimentoLeito.rotation.x = -Math.PI / 2;
+sedimentoLeito.position.y = -0.18;
+scene.add(sedimentoLeito);
+
+// Bancos de areia/pedra expostos quando a vazão cai abaixo do necessário
+const bancosAreia = [];
+const bancoGeo = new THREE.SphereGeometry(1, 12, 6);
+const posicoesBanco = [[-14, -1.5], [3, 2.0], [16, -1.0]];
+for (const [bx, bz] of posicoesBanco) {
+  const m = new THREE.Mesh(bancoGeo, new THREE.MeshStandardMaterial({ color: 0xcbb583, roughness: 1.0 }));
+  m.position.set(bx, -0.55, bz);
+  m.scale.set(2.4, 0.22, 1.5);
+  m.visible = false;
+  scene.add(m);
+  bancosAreia.push(m);
+}
+
+// Tubulação industrial + fábrica (fonte de poluição pontual)
 const tuboGeo = new THREE.CylinderGeometry(0.45, 0.45, 3.2, 16);
 const tuboMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, roughness: 0.6, metalness: 0.4 });
 const tubo = new THREE.Mesh(tuboGeo, tuboMat);
 tubo.rotation.z = Math.PI / 2;
-tubo.position.set(-9, 0.6, 5.6);
+tubo.position.set(-11, 0.6, 5.6);
 scene.add(tubo);
 
-// Partículas: despejo poluente (tubo -> água)
-const N_DESPEJO = 260;
-const despejoGeo = new THREE.BufferGeometry();
-const despejoPos = new Float32Array(N_DESPEJO * 3);
-const despejoSeed = new Float32Array(N_DESPEJO);
-for (let i = 0; i < N_DESPEJO; i++) { despejoSeed[i] = Math.random(); }
-despejoGeo.setAttribute('position', new THREE.BufferAttribute(despejoPos, 3));
-const despejoMat = new THREE.PointsMaterial({ color: 0x3a2f22, size: 0.22, transparent: true, opacity: 0.0, depthWrite: false });
-const despejo = new THREE.Points(despejoGeo, despejoMat);
-scene.add(despejo);
+const fabricaGrupo = new THREE.Group();
+const corpoFabrica = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 4), new THREE.MeshStandardMaterial({ color: 0x8d8d8d, roughness: 0.8 }));
+corpoFabrica.position.set(0, 1.5, 0);
+fabricaGrupo.add(corpoFabrica);
+const chamine = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 4, 10), new THREE.MeshStandardMaterial({ color: 0x707070 }));
+chamine.position.set(1.6, 4.5, 0);
+fabricaGrupo.add(chamine);
+fabricaGrupo.position.set(-13, 0, 11);
+scene.add(fabricaGrupo);
 
-// Partículas: bolhas de oxigenação (tratamento/OD saudável)
+// Tubulação doméstica (esgoto residencial) + casas
+const tuboDomGeo = new THREE.CylinderGeometry(0.22, 0.22, 2.0, 12);
+const tuboDom = new THREE.Mesh(tuboDomGeo, tuboMat);
+tuboDom.rotation.z = Math.PI / 2;
+tuboDom.position.set(12, 0.35, 5.6);
+scene.add(tuboDom);
+
+const casasGrupo = new THREE.Group();
+const posicoesCasas = [[8, 10], [12, 12], [16, 10.5], [19, 12.5], [10, 13.5]];
+for (const [cx, cz] of posicoesCasas) {
+  const casa = new THREE.Group();
+  const corpo = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 1.6), new THREE.MeshStandardMaterial({ color: 0xe4d7bd, roughness: 0.9 }));
+  corpo.position.y = 0.6;
+  const telhado = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0xa1503a, roughness: 0.9 }));
+  telhado.rotation.y = Math.PI / 4;
+  telhado.position.y = 1.6;
+  casa.add(corpo, telhado);
+  casa.position.set(cx, 0, cz);
+  casasGrupo.add(casa);
+}
+scene.add(casasGrupo);
+
+// Plantação (margem oposta — zona de escoamento superficial)
+const plantacaoGrupo = new THREE.Group();
+const plantacaoMats = [];
+for (let linha = 0; linha < 5; linha++) {
+  for (let coluna = 0; coluna < 9; coluna++) {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x5fae3d, roughness: 1.0 });
+    const bloco = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.28, 1.5), mat);
+    bloco.position.set(-19 + coluna * 4.6, 0.14, -10.5 - linha * 1.7);
+    plantacaoGrupo.add(bloco);
+    plantacaoMats.push(mat);
+  }
+}
+scene.add(plantacaoGrupo);
+
+// Chuva (índice de escoamento real do balanço hídrico controla contagem/opacidade)
+const N_CHUVA = 500;
+const chuvaGeo = new THREE.BufferGeometry();
+const chuvaPos = new Float32Array(N_CHUVA * 3);
+const chuvaVel = new Float32Array(N_CHUVA);
+for (let i = 0; i < N_CHUVA; i++) {
+  chuvaPos[i*3] = (Math.random() - 0.5) * 70;
+  chuvaPos[i*3+1] = Math.random() * 18;
+  chuvaPos[i*3+2] = (Math.random() - 0.5) * 38;
+  chuvaVel[i] = 0.25 + Math.random() * 0.2;
+}
+chuvaGeo.setAttribute('position', new THREE.BufferAttribute(chuvaPos, 3));
+const chuvaMat = new THREE.PointsMaterial({ color: 0xbfe0f0, size: 0.10, transparent: true, opacity: 0.0, depthWrite: false });
+const chuva = new THREE.Points(chuvaGeo, chuvaMat);
+scene.add(chuva);
+
+// Lama de escoamento superficial: plantação -> rio (chuva forte + baixo controle de sedimento)
+const N_LAMA = 160;
+const lamaGeo = new THREE.BufferGeometry();
+const lamaPos = new Float32Array(N_LAMA * 3);
+const lamaSeed = new Float32Array(N_LAMA);
+for (let i = 0; i < N_LAMA; i++) { lamaSeed[i] = Math.random(); }
+lamaGeo.setAttribute('position', new THREE.BufferAttribute(lamaPos, 3));
+const lamaMat = new THREE.PointsMaterial({ color: 0x5a4527, size: 0.20, transparent: true, opacity: 0.0, depthWrite: false });
+const lama = new THREE.Points(lamaGeo, lamaMat);
+scene.add(lama);
+
+// Algas (floração por excesso de Nutrientes — eutrofização)
+const N_ALGAS = 220;
+const algasGeo = new THREE.BufferGeometry();
+const algasPos = new Float32Array(N_ALGAS * 3);
+for (let i = 0; i < N_ALGAS; i++) {
+  algasPos[i*3] = (Math.random() - 0.5) * 62;
+  algasPos[i*3+1] = 0.05 + Math.random() * 0.03;
+  algasPos[i*3+2] = (Math.random() - 0.5) * (AGUA_LARGURA - 1.5);
+}
+algasGeo.setAttribute('position', new THREE.BufferAttribute(algasPos, 3));
+const algasMat = new THREE.PointsMaterial({ color: 0x6bbf3a, size: 0.55, transparent: true, opacity: 0.0, depthWrite: false });
+const algas = new THREE.Points(algasGeo, algasMat);
+scene.add(algas);
+
+// Filme de óleo / espuma química (Metais/Tóxicos + severidade orgânica)
+const N_OLEO = 140;
+const oleoGeo = new THREE.BufferGeometry();
+const oleoPos = new Float32Array(N_OLEO * 3);
+for (let i = 0; i < N_OLEO; i++) {
+  oleoPos[i*3] = (Math.random() - 0.5) * 30 - 8;
+  oleoPos[i*3+1] = 0.04;
+  oleoPos[i*3+2] = (Math.random() - 0.5) * (AGUA_LARGURA - 2);
+}
+oleoGeo.setAttribute('position', new THREE.BufferAttribute(oleoPos, 3));
+const oleoMat = new THREE.PointsMaterial({ color: 0x2a2a1e, size: 0.4, transparent: true, opacity: 0.0, depthWrite: false });
+const oleo = new THREE.Points(oleoGeo, oleoMat);
+scene.add(oleo);
+
+// Partículas: despejo poluente (2 tubos -> água)
+function criarDespejo(origemX, origemZ) {
+  const N = 220;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(N * 3);
+  const seed = new Float32Array(N);
+  for (let i = 0; i < N; i++) { seed[i] = Math.random(); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color: 0x3a2f22, size: 0.2, transparent: true, opacity: 0.0, depthWrite: false });
+  const pontos = new THREE.Points(geo, mat);
+  scene.add(pontos);
+  return { pontos, geo, mat, seed, origemX, origemZ, N };
+}
+const despejoIndustrial = criarDespejo(-11, 5.6);
+const despejoDomestico = criarDespejo(12, 5.6);
+
+// Bolhas de oxigenação (tratamento/OD saudável)
 const N_BOLHAS = 180;
 const bolhasGeo = new THREE.BufferGeometry();
 const bolhasPos = new Float32Array(N_BOLHAS * 3);
@@ -247,7 +403,7 @@ for (let i = 0; i < N_VEG; i++) {
   vegetacao.push(m);
 }
 
-camera.position.set(0, 11.5, 23);
+camera.position.set(0, 13.5, 27);
 camera.lookAt(0, 0, 0);
 
 // ---------------------------------------------------------------------------
@@ -255,7 +411,10 @@ camera.lookAt(0, 0, 0);
 // ---------------------------------------------------------------------------
 let anoAtual = ANO_MIN;
 let tocando = false;
-let corAnterior = null;
+let nivelAguaAlvo = 0;
+let escalaAguaAlvo = 1;
+let chuvaAtivaAlvo = 0;
+let lamaAtivaAlvo = 0;
 
 function metricaLinha(nome, valor, unidade) {
   return nome + ": <b>" + valor + (unidade ? (" " + unidade) : "") + "</b>";
@@ -269,41 +428,76 @@ function atualizarParaAno(ano) {
 
   const severidade = Math.max(0, Math.min(1, (100 - linha.iqa) / 100));
   const turbidezNorm = Math.max(0, Math.min(1, linha.turbidez_ntu / 45.0));
+  const solidosNorm = Math.max(0, Math.min(1, linha.solidos_totais_mg_l / 350.0));
   const odNorm = Math.max(0, Math.min(1, linha.od_mg_l / 8.0));
   const bioticoNorm = Math.max(0, Math.min(1, linha.indice_biotico / 100.0));
+  const nutrienteNorm = Math.max(0, Math.min(1, (linha.fosforo_mg_l / 1.2 + linha.nitrogenio_mg_l / 12.0) / 2));
+  const metaisNorm = Math.max(0, Math.min(1, linha.metais_toxicos_indice / 100.0));
+  const vazaoNorm = normalizar(linha.vazao_m3s_medio, FAIXA_VAZAO);
+  const escoamentoNorm = normalizar(linha.indice_escoamento_mm, FAIXA_ESCOAMENTO);
+  const phDistancia = Math.max(0, Math.min(1, Math.abs(linha.ph - 7.0) / 1.8));
 
   aguaUniforms.uSeverity.value = severidade;
   aguaUniforms.uTurbidez.value = turbidezNorm;
 
-  // Iluminação: quente/brilhante (limpo) <-> fria/opaca (poluído)
+  // Iluminação: quente/brilhante (limpo) <-> fria/opaca (poluído); mais nublado com chuva forte
   const corSolLimpo = new THREE.Color(0xfff3d6);
   const corSolPoluido = new THREE.Color(0x8fa3ad);
-  sol.color.copy(corSolLimpo).lerp(corSolPoluido, severidade);
-  sol.intensity = 1.6 - severidade * 0.9;
+  sol.color.copy(corSolLimpo).lerp(corSolPoluido, Math.max(severidade, escoamentoNorm * 0.5));
+  sol.intensity = 1.6 - severidade * 0.9 - escoamentoNorm * 0.3;
   const corFogLimpo = new THREE.Color(0xbfe0f5);
   const corFogPoluido = new THREE.Color(0x7c7566);
   const corFogAtual = corFogLimpo.clone().lerp(corFogPoluido, severidade);
   scene.fog.color.copy(corFogAtual);
   renderer.setClearColor(corFogAtual, 1.0);
 
-  // Despejo da tubulação: ativo proporcional à severidade (fonte poluidora ainda ativa)
-  despejoMat.opacity = 0.55 * severidade;
+  // Despejo das 2 tubulações (indústria + residências): ativo proporcional à severidade
+  despejoIndustrial.mat.opacity = 0.55 * severidade;
+  despejoDomestico.mat.opacity = 0.5 * severidade;
 
   // Bolhas de oxigenação: proporcional ao OD real
   bolhasMat.opacity = 0.75 * odNorm;
 
-  // Vegetação: verde viçoso <-> seco/acastanhado
+  // Algas (eutrofização): proporcional a Fósforo+Nitrogênio
+  algasMat.opacity = 0.75 * Math.pow(nutrienteNorm, 1.3);
+
+  // Filme de óleo / espuma química: proporcional a Metais/Tóxicos e à severidade orgânica
+  oleoMat.opacity = 0.6 * Math.max(metaisNorm, severidade * 0.5);
+
+  // Sedimento no leito: proporcional a Sólidos Totais
+  sedimentoLeitoMat.opacity = 0.55 * solidosNorm;
+
+  // Chuva: intensidade real do balanço hídrico do ano/cenário
+  chuvaAtivaAlvo = escoamentoNorm;
+
+  // Lama de escoamento superficial: só aparece com chuva forte E turbidez alta (baixo controle)
+  lamaAtivaAlvo = escoamentoNorm > 0.35 && turbidezNorm > 0.35 ? Math.min(escoamentoNorm, turbidezNorm) : 0;
+
+  // Nível d'água e canal: cai e estreita quando a vazão fica abaixo do necessário
+  nivelAguaAlvo = -0.55 * (1 - vazaoNorm);
+  escalaAguaAlvo = 0.62 + 0.38 * vazaoNorm;
+  bancosAreia.forEach((b) => { b.visible = vazaoNorm < 0.45; });
+
+  // Vegetação: verde viçoso <-> seco/acastanhado (severidade + pH fora da faixa neutra)
   const corVegVivo = new THREE.Color(0x4a8a3a);
   const corVegSeca = new THREE.Color(0x6b5a34);
+  const murchamento = Math.min(1, severidade * 0.7 + phDistancia * 0.5);
   vegetacao.forEach((v) => {
-    v.material.color.copy(corVegVivo).lerp(corVegSeca, severidade);
+    v.material.color.copy(corVegVivo).lerp(corVegSeca, murchamento);
     v.scale.y = 0.7 + bioticoNorm * 0.5;
   });
 
-  // Peixes: visíveis/ativos conforme índice biótico
+  // Plantação: viçosa quando bem cuidada; some de vigor visual se o solo já está exaurido (proxy: metais/solidos)
+  const corPlantaViva = new THREE.Color(0x5fae3d);
+  const corPlantaFraca = new THREE.Color(0x8a8a4a);
+  plantacaoMats.forEach((m) => m.color.copy(corPlantaViva).lerp(corPlantaFraca, metaisNorm * 0.5));
+
+  // Peixes: vivos/ativos conforme índice biótico; boiam de barriga p/ cima se OD crítico
+  const odCritico = linha.od_mg_l < 2.0;
   peixes.forEach((p) => {
-    p.visible = bioticoNorm > 0.12;
-    p.userData.profAlvo = -0.4 - (1 - bioticoNorm) * 1.6;
+    p.visible = bioticoNorm > 0.08 || odCritico;
+    p.userData.morto = odCritico;
+    p.userData.profAlvo = odCritico ? -0.02 : (-0.4 - (1 - bioticoNorm) * 1.6);
   });
 
   document.querySelector('#painel .ano').textContent = "Ano " + ano;
@@ -314,6 +508,7 @@ function atualizarParaAno(ano) {
     metricaLinha("OD", linha.od_mg_l.toFixed(2), "mg/L"),
     metricaLinha("DBO", linha.dbo_mg_l.toFixed(1), "mg/L"),
     metricaLinha("Turbidez", linha.turbidez_ntu.toFixed(0), "NTU"),
+    metricaLinha("Vazão", linha.vazao_m3s_medio.toFixed(1), "m³/s"),
     metricaLinha("E. coli", Math.round(linha.e_coli_nmp_100ml).toLocaleString('pt-BR'), "NMP/100mL"),
     metricaLinha("Índice biótico", linha.indice_biotico.toFixed(0)),
   ].join("<br>");
@@ -349,6 +544,19 @@ function aoRedimensionar() {
 }
 window.addEventListener('resize', aoRedimensionar);
 
+function animarDespejo(d, t) {
+  const dp = d.geo.attributes.position.array;
+  for (let i = 0; i < d.N; i++) {
+    const s = d.seed[i];
+    const vida = (t * (0.25 + s * 0.3) + s * 10) % 6.0;
+    const sinalX = d.origemX < 0 ? 1 : -1;
+    dp[i*3] = d.origemX + sinalX * vida * 1.6 + Math.sin(s * 40 + t) * 0.3;
+    dp[i*3+1] = 0.3 - vida * 0.06;
+    dp[i*3+2] = d.origemZ - vida * 0.4 + Math.sin(s * 20) * vida * 0.5;
+  }
+  d.geo.attributes.position.needsUpdate = true;
+}
+
 let t = 0;
 function loop() {
   requestAnimationFrame(loop);
@@ -356,22 +564,29 @@ function loop() {
   aguaUniforms.uTime.value = t;
 
   // câmera: órbita suave contínua ("plano fluido")
-  const raioCam = 24.0 + Math.sin(t * 0.05) * 1.5;
-  camera.position.x = Math.sin(t * 0.05) * raioCam * 0.5;
-  camera.position.z = Math.cos(t * 0.05) * raioCam * 0.5 + 6;
-  camera.position.y = 10.5 + Math.sin(t * 0.04) * 1.0;
+  const raioCam = 27.0 + Math.sin(t * 0.05) * 1.5;
+  camera.position.x = Math.sin(t * 0.045) * raioCam * 0.5;
+  camera.position.z = Math.cos(t * 0.045) * raioCam * 0.5 + 7;
+  camera.position.y = 12.5 + Math.sin(t * 0.04) * 1.0;
   camera.lookAt(0, -0.3, 0);
 
-  // despejo: partículas descendo/espalhando a partir do tubo
-  const dp = despejoGeo.attributes.position.array;
-  for (let i = 0; i < N_DESPEJO; i++) {
-    const s = despejoSeed[i];
-    const vida = (t * (0.25 + s * 0.3) + s * 10) % 6.0;
-    dp[i*3] = -9 + vida * 1.6 + Math.sin(s * 40 + t) * 0.3;
-    dp[i*3+1] = 0.3 - vida * 0.06;
-    dp[i*3+2] = 5.6 - vida * 0.4 + Math.sin(s * 20) * vida * 0.5;
-  }
-  despejoGeo.attributes.position.needsUpdate = true;
+  // nível/largura da água transicionam suavemente (evita salto brusco ao trocar de ano)
+  // (a água/leito são planos rotacionados -90° em X: a "largura" do rio é o eixo
+  // LOCAL Y da geometria, não Z — por isso escalamos scale.y nesses dois; já as
+  // partículas de superfície (Points, sem rotação) usam Z como largura de verdade)
+  agua.position.y += (nivelAguaAlvo - agua.position.y) * 0.03;
+  agua.scale.y += (escalaAguaAlvo - agua.scale.y) * 0.03;
+  sedimentoLeito.position.y = agua.position.y - 0.16;
+  sedimentoLeito.scale.y = agua.scale.y;
+  algas.scale.z = agua.scale.y;
+  algas.position.y = agua.position.y;
+  oleo.scale.z = agua.scale.y;
+  oleo.position.y = agua.position.y;
+  bolhas.scale.z = agua.scale.y;
+  bolhas.position.y = agua.position.y;
+
+  animarDespejo(despejoIndustrial, t);
+  animarDespejo(despejoDomestico, t);
 
   // bolhas subindo
   const bp = bolhasGeo.attributes.position.array;
@@ -382,13 +597,51 @@ function loop() {
   }
   bolhasGeo.attributes.position.needsUpdate = true;
 
-  // peixes nadando
+  // algas: leve balanço na superfície
+  const ap = algasGeo.attributes.position.array;
+  for (let i = 0; i < N_ALGAS; i++) {
+    ap[i*3+1] = 0.05 + Math.sin(t * 0.6 + i) * 0.015;
+  }
+  algasGeo.attributes.position.needsUpdate = true;
+
+  // chuva: caindo continuamente, opacidade/velocidade real via chuvaAtivaAlvo
+  chuvaMat.opacity += (chuvaAtivaAlvo * 0.7 - chuvaMat.opacity) * 0.05;
+  if (chuvaMat.opacity > 0.02) {
+    const cp = chuvaGeo.attributes.position.array;
+    for (let i = 0; i < N_CHUVA; i++) {
+      cp[i*3+1] -= chuvaVel[i] * (0.5 + chuvaAtivaAlvo);
+      if (cp[i*3+1] < 0) cp[i*3+1] = 18;
+    }
+    chuvaGeo.attributes.position.needsUpdate = true;
+  }
+
+  // lama de escoamento: plantação (z negativo) -> borda do rio, ativa com chuva forte + turbidez alta
+  lamaMat.opacity += (lamaAtivaAlvo * 0.8 - lamaMat.opacity) * 0.05;
+  if (lamaMat.opacity > 0.02) {
+    const lp = lamaGeo.attributes.position.array;
+    for (let i = 0; i < N_LAMA; i++) {
+      const s = lamaSeed[i];
+      const vida = (t * (0.3 + s * 0.25) + s * 8) % 5.0;
+      lp[i*3] = -18 + s * 36;
+      lp[i*3+1] = 0.1;
+      lp[i*3+2] = -11 + vida * 0.95;
+    }
+    lamaGeo.attributes.position.needsUpdate = true;
+  }
+
+  // peixes nadando (ou boiando imóveis de barriga p/ cima se a água estiver crítica)
   peixes.forEach((p) => {
     const u = p.userData;
-    u.fase += 0.016 * u.vel;
+    p.position.y += ((u.profAlvo !== undefined ? u.profAlvo : u.prof) - p.position.y) * 0.02;
+    if (u.morto) {
+      p.rotation.z += (Math.PI - p.rotation.z) * 0.05;
+      u.fase += 0.016 * u.vel * 0.15;
+    } else {
+      p.rotation.z += (0 - p.rotation.z) * 0.05;
+      u.fase += 0.016 * u.vel;
+    }
     p.position.x = Math.sin(u.fase) * u.raio;
     p.position.z = Math.cos(u.fase) * u.raio * 0.5;
-    p.position.y += ((u.profAlvo !== undefined ? u.profAlvo : u.prof) - p.position.y) * 0.02;
     p.rotation.y = -u.fase + Math.PI / 2;
   });
 

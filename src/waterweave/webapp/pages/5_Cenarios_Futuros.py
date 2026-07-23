@@ -41,6 +41,7 @@ TRECHO_IDS = list(TRECHOS)
 CAMPOS_SAIDA = [
     "iqa", "od_mg_l", "dbo_mg_l", "turbidez_ntu", "solidos_totais_mg_l", "temperatura_c",
     "ph", "fosforo_mg_l", "nitrogenio_mg_l", "metais_toxicos_indice", "e_coli_nmp_100ml", "indice_biotico",
+    "vazao_m3s_medio", "indice_escoamento_mm",
 ]
 
 # ---------------------------------------------------------------------------
@@ -233,5 +234,9 @@ with st.expander("Como isso é calculado"):
         "para jusante. IQA é um proxy simplificado de OD/DBO, não o IQA oficial de 9 parâmetros. "
         "Índice Biótico (macroinvertebrados/peixes) e o índice de Metais/Tóxicos são proxies "
         "ilustrativos combinando os demais parâmetros simulados — o projeto não tem dado real de "
-        "biomonitoramento nem série completa de metais individuais ingerida no pipeline."
+        "biomonitoramento nem série completa de metais individuais ingerida no pipeline. "
+        "A cena 3D (indústria, residências, plantação, chuva, assoreamento, algas, bancos de areia) "
+        "é estilizada em tempo real, não fotorrealista — cada elemento responde a uma variável "
+        "simulada específica (ver docstring de `webapp.components.rio_3d` para o mapeamento "
+        "completo variável → efeito visual), não é uma animação decorativa solta."
     )

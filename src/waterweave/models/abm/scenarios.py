@@ -108,6 +108,7 @@ def rodar_cenario_customizado(
             "e_coli_nmp_100ml": passo.e_coli_nmp_100ml,
             "metais_toxicos_indice": passo.metais_toxicos_indice,
             "indice_biotico": passo.indice_biotico,
+            "indice_escoamento_mm": passo.estado_hidrologico.indice_escoamento_mm,
         }
         for i, passo in enumerate(modelo.historico)
     ]
