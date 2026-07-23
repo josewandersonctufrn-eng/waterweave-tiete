@@ -6,12 +6,14 @@ controlado) ao longo de um horizonte de anos, e cobrindo o conjunto
 estendido de parâmetros de `models.biofisico.parametros_estendidos`.
 
 Gera o conteúdo do Modelo Completo (Opção B / NBR 10719) usado pelo relatório
-de cenário em PDF (`reports.pdf_generator.gerar_relatorio_cenario_pdf`):
-resumo (com palavras-chave), introdução (contextualização + objetivos),
-metodologia, desenvolvimento (configuração escolhida), resultados e discussão
-(resultado da simulação + comparação com a inação + implicações práticas),
-conclusão, referências bibliográficas e anexos. Suporta os 4 idiomas do
-dashboard (`webapp.i18n`) via `idioma_atual()`.
+de cenário em PDF (`reports.pdf_generator.gerar_relatorio_cenario_pdf_completo`;
+o Modelo Resumido/Opção A reaproveita apenas `resultados_discussao` desta
+mesma narrativa, via `gerar_relatorio_cenario_pdf_resumido`): resumo (com
+palavras-chave), introdução (contextualização + objetivos), metodologia,
+desenvolvimento (configuração escolhida), resultados e discussão (resultado
+da simulação + comparação com a inação + implicações práticas), conclusão,
+referências bibliográficas e anexos. Suporta os 4 idiomas do dashboard
+(`webapp.i18n`) via `idioma_atual()`.
 """
 from __future__ import annotations
 

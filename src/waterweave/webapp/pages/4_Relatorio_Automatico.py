@@ -12,7 +12,12 @@ import streamlit as st
 
 from waterweave.config import TRECHOS
 from waterweave.reports.narrative_generator import gerar_relatorio_trecho
-from waterweave.reports.pdf_generator import gerar_relatorio_completo_pdf, gerar_relatorio_trecho_pdf
+from waterweave.reports.pdf_generator import (
+    gerar_relatorio_todos_trechos_pdf_completo,
+    gerar_relatorio_todos_trechos_pdf_resumido,
+    gerar_relatorio_trecho_pdf_completo,
+    gerar_relatorio_trecho_pdf_resumido,
+)
 from waterweave.webapp import i18n, theme
 from waterweave.webapp.data_loader import load_qualidade_historica
 
@@ -37,10 +42,20 @@ relatorio = gerar_relatorio_trecho(qualidade, trecho_id, ano)
 with st.container(border=True):
     st.markdown(relatorio)
 
+formato_pdf = st.radio(
+    i18n.t("pdf.formato_label"),
+    options=["resumido", "completo"],
+    format_func=lambda f: i18n.t(f"pdf.formato_{f}"),
+    horizontal=True,
+    captions=[i18n.t("pdf.formato_resumido_desc"), i18n.t("pdf.formato_completo_desc")],
+)
+gerar_trecho_pdf = gerar_relatorio_trecho_pdf_resumido if formato_pdf == "resumido" else gerar_relatorio_trecho_pdf_completo
+gerar_todos_pdf = gerar_relatorio_todos_trechos_pdf_resumido if formato_pdf == "resumido" else gerar_relatorio_todos_trechos_pdf_completo
+
 st.download_button(
     i18n.t("rel.baixar_pdf"),
-    data=gerar_relatorio_trecho_pdf(qualidade, trecho_id, ano),
-    file_name=f"relatorio_{trecho_id}_{ano}.pdf",
+    data=gerar_trecho_pdf(qualidade, trecho_id, ano),
+    file_name=f"relatorio_{trecho_id}_{ano}_{formato_pdf}.pdf",
     mime="application/pdf",
 )
 
@@ -52,7 +67,7 @@ for outro_trecho in TRECHOS:
 
 st.download_button(
     i18n.t("rel.baixar_pdf_todos"),
-    data=gerar_relatorio_completo_pdf(qualidade, ano),
-    file_name=f"relatorio_completo_{ano}.pdf",
+    data=gerar_todos_pdf(qualidade, ano),
+    file_name=f"relatorio_completo_{ano}_{formato_pdf}.pdf",
     mime="application/pdf",
 )

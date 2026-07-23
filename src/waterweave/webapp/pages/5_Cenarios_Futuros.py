@@ -27,7 +27,7 @@ import streamlit.components.v1 as components
 
 from waterweave.config import TRECHOS
 from waterweave.models.abm.scenarios import rodar_cenario_customizado
-from waterweave.reports.pdf_generator import gerar_relatorio_cenario_pdf
+from waterweave.reports.pdf_generator import gerar_relatorio_cenario_pdf_completo, gerar_relatorio_cenario_pdf_resumido
 from waterweave.thresholds import STATUS, status_para_iqa
 from waterweave.webapp import i18n, theme
 from waterweave.webapp.components.rio_3d import renderizar_html
@@ -242,11 +242,19 @@ with col_cena:
         esforco_sedimentar=esforco_sedimentar, esforco_esgoto=esforco_esgoto, esforco_agricola=esforco_agricola,
         outorga_piso=outorga_piso, clima_pct=clima_pct,
     )
-    pdf_bytes = gerar_relatorio_cenario_pdf(theme.TRECHO_LABEL[trecho_id], horizonte_anos, config_relatorio, serie_c, serie_nc)
+    formato_pdf = st.radio(
+        i18n.t("pdf.formato_label"),
+        options=["resumido", "completo"],
+        format_func=lambda f: i18n.t(f"pdf.formato_{f}"),
+        horizontal=True,
+        captions=[i18n.t("pdf.formato_resumido_desc"), i18n.t("pdf.formato_completo_desc")],
+    )
+    gerar_cenario_pdf = gerar_relatorio_cenario_pdf_resumido if formato_pdf == "resumido" else gerar_relatorio_cenario_pdf_completo
+    pdf_bytes = gerar_cenario_pdf(theme.TRECHO_LABEL[trecho_id], horizonte_anos, config_relatorio, serie_c, serie_nc)
     st.download_button(
         i18n.t("cf.baixar_pdf"),
         data=pdf_bytes,
-        file_name=f"cenario_{trecho_id}_{horizonte_anos}anos.pdf",
+        file_name=f"cenario_{trecho_id}_{horizonte_anos}anos_{formato_pdf}.pdf",
         mime="application/pdf",
     )
 

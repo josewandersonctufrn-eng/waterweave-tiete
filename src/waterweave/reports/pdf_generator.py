@@ -16,14 +16,18 @@ alinhamento justificado, tom impessoal (3ª pessoa/voz passiva) em todo o
 texto-fonte (`webapp.i18n`). Em vez de `write_html` (que não justifica texto
 no fpdf2), o corpo é renderizado via `multi_cell(..., align="J", markdown=True)`.
 
-Dois modelos de documento (ver seção 1 do requisito):
-  Opção A (Resumido)  -> `gerar_relatorio_trecho_pdf`/`gerar_relatorio_completo_pdf`
-                          (Relatório Automático): cabeçalho, objetivo, resumo das
-                          atividades, resultados principais, assinatura.
-  Opção B (Completo/NBR 10719) -> `gerar_relatorio_cenario_pdf` (Cenários Futuros):
-                          capa, folha de rosto, resumo+palavras-chave, sumário,
-                          introdução, metodologia, desenvolvimento, resultados e
-                          discussão, conclusão, referências, anexos.
+Dois modelos de documento (ver seção 1 do requisito), disponíveis para os dois relatórios do
+app (Relatório Automático e Cenários Futuros) — o usuário escolhe o formato na tela:
+  Opção A (Resumido)  -> `gerar_relatorio_trecho_pdf_resumido`/
+                          `gerar_relatorio_todos_trechos_pdf_resumido`/
+                          `gerar_relatorio_cenario_pdf_resumido`: cabeçalho, objetivo,
+                          resumo das atividades, resultados principais, assinatura.
+  Opção B (Completo/NBR 10719) -> `gerar_relatorio_trecho_pdf_completo`/
+                          `gerar_relatorio_todos_trechos_pdf_completo`/
+                          `gerar_relatorio_cenario_pdf_completo`: capa, folha de rosto,
+                          resumo+palavras-chave, sumário, introdução, metodologia,
+                          desenvolvimento, resultados e discussão, conclusão,
+                          referências, anexos.
 """
 from __future__ import annotations
 
@@ -34,7 +38,11 @@ from fpdf import FPDF
 
 from waterweave.config import TRECHOS
 from waterweave.reports.cenario_narrativo import gerar_narrativa_cenario_completa
-from waterweave.reports.narrative_generator import gerar_relatorio_trecho
+from waterweave.reports.narrative_generator import (
+    gerar_relatorio_trecho,
+    gerar_relatorio_trecho_completo,
+    resumo_trecho_item,
+)
 from waterweave.webapp import i18n
 
 def _emoji_para_texto() -> dict[str, str]:
@@ -259,7 +267,7 @@ def _renderizar_resultados_trecho(pdf: FPDF, relatorio_md: str, subtitulo: str |
         _paragrafo(pdf, nota, tamanho=_TAMANHO_NOTA, italico=True)
 
 
-def gerar_relatorio_trecho_pdf(qualidade, trecho_id: str, ano: int) -> bytes:
+def gerar_relatorio_trecho_pdf_resumido(qualidade, trecho_id: str, ano: int) -> bytes:
     """Gera o PDF do relatório automatizado de um único trecho, no ano informado (Modelo
     Resumido / Opção A: cabeçalho, objetivo, resumo das atividades, resultados principais,
     assinatura — ver requisito de redação técnica em `webapp.i18n` namespace `pdf.a.*`)."""
@@ -286,7 +294,7 @@ def gerar_relatorio_trecho_pdf(qualidade, trecho_id: str, ano: int) -> bytes:
     return bytes(pdf.output())
 
 
-def gerar_relatorio_completo_pdf(qualidade, ano: int) -> bytes:
+def gerar_relatorio_todos_trechos_pdf_resumido(qualidade, ano: int) -> bytes:
     """Gera o PDF consolidado do relatório automatizado de todos os trechos, no mesmo ano
     (Modelo Resumido / Opção A): um único cabeçalho/objetivo/resumo das atividades, seguido de
     "Resultados Principais" por trecho, e uma assinatura única ao final."""
@@ -310,6 +318,164 @@ def gerar_relatorio_completo_pdf(qualidade, ano: int) -> bytes:
         _renderizar_resultados_trecho(pdf, relatorio_md, subtitulo=nome_trecho)
 
     _renderizar_assinatura(pdf)
+    return bytes(pdf.output())
+
+
+def _renderizar_documento_completo_inicio(pdf: FPDF, titulo: str, local_valor: str, objetivo_geral: str, resumo: str, palavras_chave: str) -> None:
+    """Elementos pré-textuais comuns ao Modelo Completo (Opção B): capa, folha de rosto,
+    resumo+palavras-chave e sumário (via `insert_toc_placeholder`) — reaproveitado pelos 3
+    relatórios que usam este modelo (trecho, todos os trechos, cenário)."""
+    _renderizar_capa(pdf, titulo, local_valor)
+    _renderizar_folha_rosto(pdf, titulo, objetivo_geral)
+    _renderizar_resumo(pdf, resumo, palavras_chave)
+    # `insert_toc_placeholder(pages=1)` já reserva a página atual para o Sumário e realiza,
+    # internamente, o(s) page-break(s) necessário(s) — um `pdf.add_page()` extra aqui criaria
+    # uma página em branco órfã entre o Sumário e a Introdução (bug real encontrado ao testar).
+    pdf.add_page()
+    pdf.insert_toc_placeholder(_renderizar_sumario, pages=1, allow_extra_pages=True)
+
+
+def gerar_relatorio_trecho_pdf_completo(qualidade, trecho_id: str, ano: int) -> bytes:
+    """Gera o PDF do relatório automatizado de um único trecho no Modelo Completo (Opção B /
+    NBR 10719): capa, folha de rosto, resumo com palavras-chave, sumário com paginação real,
+    introdução, metodologia, desenvolvimento, resultados e discussão, conclusão, referências
+    bibliográficas e anexos."""
+    narrativa = gerar_relatorio_trecho_completo(qualidade, trecho_id, ano)
+    from waterweave.webapp.theme import TRECHO_LABEL
+
+    nome_trecho = TRECHO_LABEL[trecho_id] if trecho_id in TRECHOS else trecho_id
+    titulo = i18n.t("rel.b.titulo_pdf", trecho=nome_trecho, ano=ano)
+    if narrativa is None:
+        pdf = _novo_pdf(titulo)
+        _titulo_capa(pdf, titulo)
+        _paragrafo(pdf, i18n.t("rel.sem_dados", trecho=nome_trecho, ano=ano))
+        return bytes(pdf.output())
+
+    local_valor = f"{i18n.t('pdf.a.local_prefixo')} — {nome_trecho}"
+    pdf = _novo_pdf(titulo)
+    _renderizar_documento_completo_inicio(pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave)
+
+    pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
+    _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))
+    _paragrafo(pdf, narrativa.introducao_contexto)
+    _rotulo_negrito(pdf, i18n.t("cn.b.objetivo_geral_label"))
+    _paragrafo(pdf, narrativa.objetivo_geral)
+    _rotulo_negrito(pdf, i18n.t("cn.b.objetivos_especificos_label"))
+    _paragrafo(pdf, narrativa.objetivos_especificos)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.metodologia"), level=0)
+    _titulo_secao(pdf, 2, i18n.t("cn.b.sec.metodologia"))
+    _paragrafo(pdf, narrativa.metodologia_intro)
+    _paragrafo(pdf, narrativa.metodologia_corpo)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.desenvolvimento"), level=0)
+    _titulo_secao(pdf, 3, i18n.t("cn.b.sec.desenvolvimento"))
+    _paragrafo(pdf, narrativa.desenvolvimento_intro)
+    for paragrafo in narrativa.desenvolvimento:
+        _paragrafo(pdf, paragrafo)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.resultados_discussao"), level=0)
+    _titulo_secao(pdf, 4, i18n.t("cn.b.sec.resultados_discussao"))
+    for indice, paragrafo in enumerate(narrativa.resultados_discussao):
+        eh_nota = indice == len(narrativa.resultados_discussao) - 1
+        _paragrafo(pdf, paragrafo, tamanho=_TAMANHO_NOTA if eh_nota else _TAMANHO_CORPO, italico=eh_nota)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.conclusao"), level=0)
+    _titulo_secao(pdf, 5, i18n.t("cn.b.sec.conclusao"))
+    _paragrafo(pdf, narrativa.conclusao)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.referencias"), level=0)
+    _titulo_secao(pdf, "", i18n.t("cn.b.sec.referencias"))
+    _paragrafo(pdf, narrativa.referencias, hifenizar=False)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.anexos"), level=0)
+    _titulo_secao(pdf, "", i18n.t("cn.b.sec.anexos"))
+    _paragrafo(pdf, narrativa.anexos)
+
+    return bytes(pdf.output())
+
+
+def gerar_relatorio_todos_trechos_pdf_completo(qualidade, ano: int) -> bytes:
+    """Gera o PDF consolidado de todos os trechos no Modelo Completo (Opção B / NBR 10719):
+    um único conjunto de elementos pré-textuais (capa/folha de rosto/resumo/sumário) e
+    introdução/metodologia/conclusão compartilhados, com "Desenvolvimento" e "Resultados e
+    Discussão" organizados em subseções por trecho."""
+    from waterweave.webapp.theme import TRECHO_LABEL
+
+    titulo = i18n.t("rel.b.titulo_pdf_todos", ano=ano)
+    resumos_trechos = [
+        item for trecho_id in TRECHOS
+        if (item := resumo_trecho_item(qualidade, trecho_id, ano)) is not None
+    ]
+    resumo = i18n.t("rel.b.resumo_texto_todos", ano=ano, resumo_trechos="; ".join(resumos_trechos))
+    objetivo_geral = i18n.t("rel.b.objetivo_geral_texto_todos", ano=ano)
+
+    pdf = _novo_pdf(titulo)
+    _renderizar_documento_completo_inicio(pdf, titulo, i18n.t("pdf.a.local_prefixo"), objetivo_geral, resumo, i18n.t("rel.b.palavras_chave_lista"))
+
+    pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
+    _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))
+    _paragrafo(pdf, i18n.t("cn.b.introducao_contexto"))
+    _rotulo_negrito(pdf, i18n.t("cn.b.objetivo_geral_label"))
+    _paragrafo(pdf, objetivo_geral)
+    _rotulo_negrito(pdf, i18n.t("cn.b.objetivos_especificos_label"))
+    _paragrafo(pdf, i18n.t("rel.b.objetivos_especificos_itens"))
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.metodologia"), level=0)
+    _titulo_secao(pdf, 2, i18n.t("cn.b.sec.metodologia"))
+    _paragrafo(pdf, i18n.t("rel.b.metodologia_intro"))
+    _paragrafo(pdf, i18n.t("cn.nota"))
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.desenvolvimento"), level=0)
+    _titulo_secao(pdf, 3, i18n.t("cn.b.sec.desenvolvimento"))
+    for trecho_id in TRECHOS:
+        nome_trecho = TRECHO_LABEL[trecho_id]
+        narrativa = gerar_relatorio_trecho_completo(qualidade, trecho_id, ano)
+        if narrativa is None:
+            continue
+        _garantir_espaco(pdf, 20)
+        _rotulo_negrito(pdf, nome_trecho)
+        _paragrafo(pdf, narrativa.desenvolvimento_intro)
+        for paragrafo in narrativa.desenvolvimento:
+            _paragrafo(pdf, paragrafo)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.resultados_discussao"), level=0)
+    _titulo_secao(pdf, 4, i18n.t("cn.b.sec.resultados_discussao"))
+    for trecho_id in TRECHOS:
+        nome_trecho = TRECHO_LABEL[trecho_id]
+        narrativa = gerar_relatorio_trecho_completo(qualidade, trecho_id, ano)
+        if narrativa is None:
+            continue
+        _garantir_espaco(pdf, 20)
+        _rotulo_negrito(pdf, nome_trecho)
+        for indice, paragrafo in enumerate(narrativa.resultados_discussao):
+            eh_nota = indice == len(narrativa.resultados_discussao) - 1
+            _paragrafo(pdf, paragrafo, tamanho=_TAMANHO_NOTA if eh_nota else _TAMANHO_CORPO, italico=eh_nota)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.conclusao"), level=0)
+    _titulo_secao(pdf, 5, i18n.t("cn.b.sec.conclusao"))
+    _paragrafo(pdf, i18n.t("rel.b.conclusao_texto_todos"))
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.referencias"), level=0)
+    _titulo_secao(pdf, "", i18n.t("cn.b.sec.referencias"))
+    _paragrafo(pdf, i18n.t("cn.b.referencias_lista"), hifenizar=False)
+
+    _garantir_espaco(pdf, 25)
+    pdf.start_section(i18n.t("cn.b.sec.anexos"), level=0)
+    _titulo_secao(pdf, "", i18n.t("cn.b.sec.anexos"))
+    _paragrafo(pdf, i18n.t("rel.b.anexos_texto"))
+
     return bytes(pdf.output())
 
 
@@ -517,7 +683,37 @@ def _renderizar_sumario(pdf: FPDF, outline: list) -> None:
         pdf.cell(largura_pagina, 7, pagina, align="R", new_x="LMARGIN", new_y="NEXT")
 
 
-def gerar_relatorio_cenario_pdf(
+def gerar_relatorio_cenario_pdf_resumido(
+    trecho_nome: str,
+    horizonte_anos: int,
+    config: dict,
+    serie_controlado: list[dict],
+    serie_nao_controlado: list[dict],
+) -> bytes:
+    """Gera o PDF do cenário simulado no Modelo Resumido (Opção A): cabeçalho, objetivo,
+    resumo das atividades, resultados principais (resultado + comparação com a inação +
+    implicações práticas) e assinatura."""
+    narrativa = gerar_narrativa_cenario_completa(trecho_nome, horizonte_anos, config, serie_controlado, serie_nao_controlado)
+    titulo = i18n.t("cn.titulo", trecho=trecho_nome, horizonte=horizonte_anos)
+
+    pdf = _novo_pdf(titulo)
+    _renderizar_cabecalho_resumido(pdf, titulo, f"{i18n.t('pdf.a.local_prefixo')} — {trecho_nome}")
+
+    _titulo_secao(pdf, "", i18n.t("pdf.a.objetivo_titulo"))
+    _paragrafo(pdf, i18n.t("cn.a.objetivo_texto", trecho=trecho_nome, horizonte=horizonte_anos))
+
+    _titulo_secao(pdf, "", i18n.t("pdf.a.resumo_atividades_titulo"))
+    _paragrafo(pdf, i18n.t("cn.a.resumo_atividades_itens"))
+
+    _titulo_secao(pdf, "", i18n.t("pdf.a.resultados_titulo"))
+    for paragrafo in narrativa.resultados_discussao:
+        _paragrafo(pdf, paragrafo)
+
+    _renderizar_assinatura(pdf)
+    return bytes(pdf.output())
+
+
+def gerar_relatorio_cenario_pdf_completo(
     trecho_nome: str,
     horizonte_anos: int,
     config: dict,
@@ -534,16 +730,7 @@ def gerar_relatorio_cenario_pdf(
     local_valor = f"{i18n.t('pdf.a.local_prefixo')} — {trecho_nome}"
 
     pdf = _novo_pdf(titulo)
-    _renderizar_capa(pdf, titulo, local_valor)
-    _renderizar_folha_rosto(pdf, titulo, narrativa.objetivo_geral)
-    _renderizar_resumo(pdf, narrativa.resumo, narrativa.palavras_chave)
-
-    # `insert_toc_placeholder(pages=1)` já reserva a página atual para o Sumário e realiza,
-    # internamente, o(s) page-break(s) necessário(s) — um `pdf.add_page()` extra aqui criaria
-    # uma página em branco órfã entre o Sumário e a Introdução (bug real encontrado ao testar:
-    # o Sumário reportava "Introdução" na página 6, mas a página 5 ficava vazia).
-    pdf.add_page()
-    pdf.insert_toc_placeholder(_renderizar_sumario, pages=1, allow_extra_pages=True)
+    _renderizar_documento_completo_inicio(pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave)
 
     pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
     _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))

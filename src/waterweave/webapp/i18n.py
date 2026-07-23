@@ -187,6 +187,127 @@ _T: dict[str, dict[str, str]] = {
         "es": "_Nota de procedencia: los indicadores de esta sección provienen de una serie simulada (proxy histórico), no de telemetría directa — ver `ingestion.bronze_qualidade_solo`._",
     },
 
+    # ---- Seletor de formato do relatório em PDF (Resumido/Completo) — ambas as telas -------
+    "pdf.formato_label": {"pt": "Formato do relatório em PDF", "en": "PDF report format", "fr": "Format du rapport PDF", "es": "Formato del informe en PDF"},
+    "pdf.formato_resumido": {"pt": "Resumido", "en": "Summary", "fr": "Résumé", "es": "Resumido"},
+    "pdf.formato_resumido_desc": {"pt": "Cabeçalho, objetivo, resumo das atividades, resultados principais e assinatura — 1 a 2 páginas.", "en": "Header, objective, summary of activities, main results and signature — 1 to 2 pages.", "fr": "En-tête, objectif, résumé des activités, résultats principaux et signature — 1 à 2 pages.", "es": "Encabezado, objetivo, resumen de actividades, resultados principales y firma — 1 a 2 páginas."},
+    "pdf.formato_completo": {"pt": "Completo (NBR 10719)", "en": "Full (NBR 10719)", "fr": "Complet (NBR 10719)", "es": "Completo (NBR 10719)"},
+    "pdf.formato_completo_desc": {"pt": "Capa, folha de rosto, resumo, sumário, introdução, metodologia, desenvolvimento, resultados e discussão, conclusão, referências e anexos.", "en": "Cover page, title page, abstract, table of contents, introduction, methodology, development, results and discussion, conclusion, references and appendices.", "fr": "Couverture, page de titre, résumé, sommaire, introduction, méthodologie, développement, résultats et discussion, conclusion, références et annexes.", "es": "Portada, hoja de rosto, resumen, sumario, introducción, metodología, desarrollo, resultados y discusión, conclusión, referencias y anexos."},
+
+    # ---- pdf_generator.py — Relatório Automático em PDF, Modelo Completo (Opção B) ---------
+    "rel.b.resumo_texto": {
+        "pt": "Este relatório documenta o estado da qualidade da água do trecho {trecho} do Rio Tietê no ano de {ano}, com base na simulação hidrobiogeoquímica do sistema WaterWeave-Tietê (modelo baseado em agentes + balanço hídrico + Streeter-Phelps, ancorado em médias reais da CETESB). O Índice de Qualidade da Água (ICA) simulado foi de {iqa:.1f} pontos, em situação **{status}**, {comparacao} média histórica da série (1940-{ano_max}) de {media:.1f}. O Oxigênio Dissolvido está em {od:.2f} mg/L e a Demanda Bioquímica de Oxigênio em {dbo:.1f} mg/L. Nos últimos {janela} anos, o ICA apresentou tendência de {dir_iqa} ({delta_iqa:+.1f} pontos). Conclui-se que o trecho {trecho} {conclusao_curta}.",
+        "en": "This report documents the water quality status of the {trecho} stretch of the Tietê River in {ano}, based on the WaterWeave-Tietê system's hydro-biogeochemical simulation (agent-based model + water balance + Streeter-Phelps, anchored to real CETESB averages). The simulated Water Quality Index (WQI) was {iqa:.1f} points, in **{status}** condition, {comparacao} the series' historical average (1940-{ano_max}) of {media:.1f}. Dissolved Oxygen is at {od:.2f} mg/L and Biochemical Oxygen Demand at {dbo:.1f} mg/L. Over the last {janela} years, the WQI trend was {dir_iqa} ({delta_iqa:+.1f} points). It is concluded that the {trecho} stretch {conclusao_curta}.",
+        "fr": "Ce rapport documente l'état de la qualité de l'eau du tronçon {trecho} du fleuve Tietê en {ano}, sur la base de la simulation hydro-biogéochimique du système WaterWeave-Tietê (modèle multi-agents + bilan hydrique + Streeter-Phelps, ancré sur des moyennes réelles CETESB). L'Indice de Qualité de l'Eau (IQE) simulé était de {iqa:.1f} points, en situation **{status}**, {comparacao} la moyenne historique de la série (1940-{ano_max}) de {media:.1f}. L'Oxygène Dissous est à {od:.2f} mg/L et la Demande Biochimique en Oxygène à {dbo:.1f} mg/L. Au cours des {janela} dernières années, l'IQE a montré une tendance {dir_iqa} ({delta_iqa:+.1f} points). Il est conclu que le tronçon {trecho} {conclusao_curta}.",
+        "es": "Este informe documenta el estado de la calidad del agua del tramo {trecho} del Río Tietê en el año {ano}, con base en la simulación hidrobiogeoquímica del sistema WaterWeave-Tietê (modelo basado en agentes + balance hídrico + Streeter-Phelps, anclado en promedios reales de la CETESB). El Índice de Calidad del Agua (ICA) simulado fue de {iqa:.1f} puntos, en situación **{status}**, {comparacao} promedio histórico de la serie (1940-{ano_max}) de {media:.1f}. El Oxígeno Disuelto está en {od:.2f} mg/L y la Demanda Bioquímica de Oxígeno en {dbo:.1f} mg/L. En los últimos {janela} años, el ICA presentó una tendencia {dir_iqa} ({delta_iqa:+.1f} puntos). Se concluye que el tramo {trecho} {conclusao_curta}.",
+    },
+    "rel.b.conclusao_curta.bom": {
+        "pt": "apresenta qualidade da água satisfatória",
+        "en": "presents satisfactory water quality",
+        "fr": "présente une qualité de l'eau satisfaisante",
+        "es": "presenta calidad del agua satisfactoria",
+    },
+    "rel.b.conclusao_curta.atencao": {
+        "pt": "apresenta qualidade da água em ponto de atenção",
+        "en": "presents water quality at a point of concern",
+        "fr": "présente une qualité de l'eau nécessitant une attention",
+        "es": "presenta calidad del agua en punto de atención",
+    },
+    "rel.b.conclusao_curta.serio": {
+        "pt": "apresenta qualidade da água em situação séria, exigindo intervenção",
+        "en": "presents water quality in serious condition, requiring intervention",
+        "fr": "présente une qualité de l'eau en situation sérieuse, nécessitant une intervention",
+        "es": "presenta calidad del agua en situación seria, que exige intervención",
+    },
+    "rel.b.conclusao_curta.critico": {
+        "pt": "apresenta qualidade da água em situação crítica, exigindo intervenção imediata",
+        "en": "presents water quality in critical condition, requiring immediate intervention",
+        "fr": "présente une qualité de l'eau en situation critique, nécessitant une intervention immédiate",
+        "es": "presenta calidad del agua en situación crítica, que exige intervención inmediata",
+    },
+    "rel.b.palavras_chave_lista": {
+        "pt": "Qualidade da água; Rio Tietê; Monitoramento; Índice de Qualidade da Água; Oxigênio Dissolvido.",
+        "en": "Water quality; Tietê River; Monitoring; Water Quality Index; Dissolved Oxygen.",
+        "fr": "Qualité de l'eau ; Fleuve Tietê ; Surveillance ; Indice de Qualité de l'Eau ; Oxygène Dissous.",
+        "es": "Calidad del agua; Río Tietê; Monitoreo; Índice de Calidad del Agua; Oxígeno Disuelto.",
+    },
+    "rel.b.objetivo_geral_texto": {
+        "pt": "Analisar o estado da qualidade da água do trecho {trecho} do Rio Tietê no ano de {ano}, a partir dos indicadores simulados de Índice de Qualidade da Água, Oxigênio Dissolvido e Demanda Bioquímica de Oxigênio.",
+        "en": "Analyze the water quality status of the {trecho} stretch of the Tietê River in {ano}, based on the simulated Water Quality Index, Dissolved Oxygen and Biochemical Oxygen Demand indicators.",
+        "fr": "Analyser l'état de la qualité de l'eau du tronçon {trecho} du fleuve Tietê en {ano}, à partir des indicateurs simulés d'Indice de Qualité de l'Eau, d'Oxygène Dissous et de Demande Biochimique en Oxygène.",
+        "es": "Analizar el estado de la calidad del agua del tramo {trecho} del Río Tietê en el año {ano}, a partir de los indicadores simulados de Índice de Calidad del Agua, Oxígeno Disuelto y Demanda Bioquímica de Oxígeno.",
+    },
+    "rel.b.objetivos_especificos_itens": {
+        "pt": "- Reportar o Índice de Qualidade da Água (ICA), Oxigênio Dissolvido (OD) e Demanda Bioquímica de Oxigênio (DBO) no ano de referência.\n- Comparar o ICA com a média histórica da série.\n- Identificar a tendência dos últimos 10 anos e eventuais alertas.",
+        "en": "- Report the Water Quality Index (WQI), Dissolved Oxygen (DO) and Biochemical Oxygen Demand (BOD) in the reference year.\n- Compare the WQI against the series' historical average.\n- Identify the trend over the last 10 years and any alerts.",
+        "fr": "- Rapporter l'Indice de Qualité de l'Eau (IQE), l'Oxygène Dissous (OD) et la Demande Biochimique en Oxygène (DBO) pour l'année de référence.\n- Comparer l'IQE à la moyenne historique de la série.\n- Identifier la tendance des 10 dernières années et les éventuelles alertes.",
+        "es": "- Reportar el Índice de Calidad del Agua (ICA), el Oxígeno Disuelto (OD) y la Demanda Bioquímica de Oxígeno (DBO) en el año de referencia.\n- Comparar el ICA con el promedio histórico de la serie.\n- Identificar la tendencia de los últimos 10 años y eventuales alertas.",
+    },
+    "rel.b.titulo_pdf_todos": {"pt": "Relatório de Qualidade da Água — Todos os Trechos ({ano})", "en": "Water Quality Report — All Stretches ({ano})", "fr": "Rapport de Qualité de l'Eau — Tous les Tronçons ({ano})", "es": "Informe de Calidad del Agua — Todos los Tramos ({ano})"},
+    "rel.b.objetivo_geral_texto_todos": {
+        "pt": "Analisar o estado da qualidade da água de todos os trechos monitorados do Rio Tietê no ano de {ano}, a partir dos indicadores simulados de Índice de Qualidade da Água, Oxigênio Dissolvido e Demanda Bioquímica de Oxigênio.",
+        "en": "Analyze the water quality status of all monitored stretches of the Tietê River in {ano}, based on the simulated Water Quality Index, Dissolved Oxygen and Biochemical Oxygen Demand indicators.",
+        "fr": "Analyser l'état de la qualité de l'eau de tous les tronçons surveillés du fleuve Tietê en {ano}, à partir des indicateurs simulés d'Indice de Qualité de l'Eau, d'Oxygène Dissous et de Demande Biochimique en Oxygène.",
+        "es": "Analizar el estado de la calidad del agua de todos los tramos monitoreados del Río Tietê en el año {ano}, a partir de los indicadores simulados de Índice de Calidad del Agua, Oxígeno Disuelto y Demanda Bioquímica de Oxígeno.",
+    },
+    "rel.b.resumo_trecho_item": {
+        "pt": "{trecho} apresentou ICA de {iqa:.1f} ({status})",
+        "en": "{trecho} had a WQI of {iqa:.1f} ({status})",
+        "fr": "{trecho} a présenté un IQE de {iqa:.1f} ({status})",
+        "es": "{trecho} presentó un ICA de {iqa:.1f} ({status})",
+    },
+    "rel.b.resumo_texto_todos": {
+        "pt": "Este relatório documenta o estado da qualidade da água de todos os trechos monitorados do Rio Tietê no ano de {ano}, com base na simulação hidrobiogeoquímica do sistema WaterWeave-Tietê (modelo baseado em agentes + balanço hídrico + Streeter-Phelps, ancorado em médias reais da CETESB). No ano de referência, {resumo_trechos}. Conclui-se que a bacia apresenta condições heterogêneas entre trechos, refletindo diferentes pressões de poluição ao longo do curso do rio, o que reforça a importância do acompanhamento segmentado por trecho.",
+        "en": "This report documents the water quality status of all monitored stretches of the Tietê River in {ano}, based on the WaterWeave-Tietê system's hydro-biogeochemical simulation (agent-based model + water balance + Streeter-Phelps, anchored to real CETESB averages). In the reference year, {resumo_trechos}. It is concluded that the basin presents heterogeneous conditions across stretches, reflecting different pollution pressures along the river's course, which reinforces the importance of stretch-by-stretch monitoring.",
+        "fr": "Ce rapport documente l'état de la qualité de l'eau de tous les tronçons surveillés du fleuve Tietê en {ano}, sur la base de la simulation hydro-biogéochimique du système WaterWeave-Tietê (modèle multi-agents + bilan hydrique + Streeter-Phelps, ancré sur des moyennes réelles CETESB). Pour l'année de référence, {resumo_trechos}. Il est conclu que le bassin présente des conditions hétérogènes entre les tronçons, reflétant différentes pressions de pollution le long du cours du fleuve, ce qui renforce l'importance d'un suivi segmenté par tronçon.",
+        "es": "Este informe documenta el estado de la calidad del agua de todos los tramos monitoreados del Río Tietê en el año {ano}, con base en la simulación hidrobiogeoquímica del sistema WaterWeave-Tietê (modelo basado en agentes + balance hídrico + Streeter-Phelps, anclado en promedios reales de la CETESB). En el año de referencia, {resumo_trechos}. Se concluye que la cuenca presenta condiciones heterogéneas entre tramos, reflejando diferentes presiones de contaminación a lo largo del curso del río, lo que refuerza la importancia del seguimiento segmentado por tramo.",
+    },
+    "rel.b.conclusao_texto_todos": {
+        "pt": "Com base nos indicadores analisados, os trechos do Rio Tietê apresentam condições heterogêneas de qualidade da água, refletindo diferentes pressões de poluição ao longo do curso do rio. Como limitação, destaca-se que os indicadores são obtidos de uma série simulada (proxy histórico), não de telemetria direta, e que cada trecho é reportado de forma independente. Recomenda-se o acompanhamento contínuo por trecho e a priorização de medidas de controle nos trechos em situação mais crítica.",
+        "en": "Based on the analyzed indicators, the stretches of the Tietê River present heterogeneous water quality conditions, reflecting different pollution pressures along the river's course. As a limitation, it should be noted that the indicators are obtained from a simulated series (historical proxy), not direct telemetry, and that each stretch is reported independently. Continuous stretch-by-stretch monitoring is recommended, along with prioritizing control measures in the stretches with the most critical condition.",
+        "fr": "Sur la base des indicateurs analysés, les tronçons du fleuve Tietê présentent des conditions hétérogènes de qualité de l'eau, reflétant différentes pressions de pollution le long du cours du fleuve. Comme limite, il convient de noter que les indicateurs proviennent d'une série simulée (proxy historique), pas de télémétrie directe, et que chaque tronçon est rapporté indépendamment. Un suivi continu par tronçon est recommandé, ainsi que la priorisation de mesures de contrôle dans les tronçons en situation la plus critique.",
+        "es": "Con base en los indicadores analizados, los tramos del Río Tietê presentan condiciones heterogéneas de calidad del agua, reflejando diferentes presiones de contaminación a lo largo del curso del río. Como limitación, se destaca que los indicadores se obtienen de una serie simulada (proxy histórico), no de telemetría directa, y que cada tramo se reporta de forma independiente. Se recomienda el seguimiento continuo por tramo y la priorización de medidas de control en los tramos en situación más crítica.",
+    },
+    "rel.b.metodologia_intro": {
+        "pt": "Os indicadores reportados a seguir são obtidos pelo mesmo motor de simulação do sistema WaterWeave-Tietê, descrito a seguir.",
+        "en": "The indicators reported below are obtained by the same simulation engine of the WaterWeave-Tietê system, described below.",
+        "fr": "Les indicateurs rapportés ci-dessous sont obtenus par le même moteur de simulation du système WaterWeave-Tietê, décrit ci-dessous.",
+        "es": "Los indicadores reportados a continuación se obtienen mediante el mismo motor de simulación del sistema WaterWeave-Tietê, descrito a continuación.",
+    },
+    "rel.b.desenvolvimento_intro": {
+        "pt": "Apresentam-se a seguir os indicadores simulados do trecho {trecho} no ano de {ano}.",
+        "en": "The simulated indicators for the {trecho} stretch in {ano} are presented below.",
+        "fr": "Les indicateurs simulés du tronçon {trecho} pour l'année {ano} sont présentés ci-dessous.",
+        "es": "A continuación se presentan los indicadores simulados del tramo {trecho} en el año {ano}.",
+    },
+    "rel.b.conclusao_texto": {
+        "pt": "Com base nos indicadores analisados, o trecho {trecho} encontrava-se em situação **{status}**, com tendência de {dir_iqa} ao longo dos últimos {janela} anos. Como limitação, destaca-se que os indicadores são obtidos de uma série simulada (proxy histórico), não de telemetria direta. Recomenda-se o acompanhamento contínuo dos parâmetros de Oxigênio Dissolvido e Demanda Bioquímica de Oxigênio, e a priorização de medidas de controle caso a tendência de deterioração se confirme.",
+        "en": "Based on the analyzed indicators, the {trecho} stretch was in **{status}** condition, with a {dir_iqa} trend over the last {janela} years. As a limitation, it should be noted that the indicators are obtained from a simulated series (historical proxy), not direct telemetry. Continuous monitoring of the Dissolved Oxygen and Biochemical Oxygen Demand parameters is recommended, along with prioritizing control measures should the deteriorating trend be confirmed.",
+        "fr": "Sur la base des indicateurs analysés, le tronçon {trecho} se trouvait en situation **{status}**, avec une tendance {dir_iqa} au cours des {janela} dernières années. Comme limite, il convient de noter que les indicateurs proviennent d'une série simulée (proxy historique), pas de télémétrie directe. Il est recommandé de suivre en continu les paramètres d'Oxygène Dissous et de Demande Biochimique en Oxygène, et de prioriser des mesures de contrôle si la tendance à la détérioration se confirme.",
+        "es": "Con base en los indicadores analizados, el tramo {trecho} se encontraba en situación **{status}**, con tendencia {dir_iqa} a lo largo de los últimos {janela} años. Como limitación, se destaca que los indicadores se obtienen de una serie simulada (proxy histórico), no de telemetría directa. Se recomienda el seguimiento continuo de los parámetros de Oxígeno Disuelto y Demanda Bioquímica de Oxígeno, y la priorización de medidas de control en caso de confirmarse la tendencia de deterioro.",
+    },
+    "rel.b.anexos_texto": {
+        "pt": "Os dados brutos da série histórica simulada (todos os anos e trechos) podem ser consultados nas telas \"Séries Históricas\" e \"Mapa Interativo\" do painel WaterWeave-Tietê.",
+        "en": "The raw data of the simulated historical series (all years and stretches) can be consulted on the \"Historical Series\" and \"Interactive Map\" screens of the WaterWeave-Tietê dashboard.",
+        "fr": "Les données brutes de la série historique simulée (toutes les années et tous les tronçons) peuvent être consultées sur les écrans « Séries Historiques » et « Carte Interactive » du tableau de bord WaterWeave-Tietê.",
+        "es": "Los datos brutos de la serie histórica simulada (todos los años y tramos) pueden consultarse en las pantallas \"Series Históricas\" y \"Mapa Interactivo\" del panel WaterWeave-Tietê.",
+    },
+    "rel.b.titulo_pdf": {"pt": "Relatório de Qualidade da Água — {trecho} ({ano})", "en": "Water Quality Report — {trecho} ({ano})", "fr": "Rapport de Qualité de l'Eau — {trecho} ({ano})", "es": "Informe de Calidad del Agua — {trecho} ({ano})"},
+
+    # ---- pdf_generator.py — Relatório de Cenário em PDF, Modelo Resumido (Opção A) ---------
+    "cn.a.objetivo_texto": {
+        "pt": "Apresentar, de forma direta e objetiva, o resultado projetado da configuração de controle escolhida para o trecho {trecho} do Rio Tietê, ao longo de um horizonte de {horizonte} anos.",
+        "en": "Present, directly and objectively, the projected result of the chosen control configuration for the {trecho} stretch of the Tietê River, over a {horizonte}-year horizon.",
+        "fr": "Présenter, de manière directe et objective, le résultat projeté de la configuration de contrôle choisie pour le tronçon {trecho} du fleuve Tietê, sur un horizon de {horizonte} ans.",
+        "es": "Presentar, de forma directa y objetiva, el resultado proyectado de la configuración de control elegida para el tramo {trecho} del Río Tietê, a lo largo de un horizonte de {horizonte} años.",
+    },
+    "cn.a.resumo_atividades_itens": {
+        "pt": "- Simulação da configuração de controle escolhida (sedimentos/erosão, esgoto/efluentes, fertilizantes/agrotóxicos, vazão ecológica) ao longo do horizonte.\n- Comparação com um cenário de inação (patamar fixo pessimista).\n- Identificação das implicações práticas do resultado projetado.",
+        "en": "- Simulation of the chosen control configuration (sediment/erosion, sewage/effluents, fertilizers/pesticides, ecological flow) over the horizon.\n- Comparison against an inaction scenario (fixed, pessimistic baseline).\n- Identification of the practical implications of the projected result.",
+        "fr": "- Simulation de la configuration de contrôle choisie (sédiments/érosion, eaux usées/effluents, engrais/pesticides, débit écologique) sur l'horizon.\n- Comparaison avec un scénario d'inaction (niveau fixe pessimiste).\n- Identification des implications pratiques du résultat projeté.",
+        "es": "- Simulación de la configuración de control elegida (sedimentos/erosión, aguas residuales/efluentes, fertilizantes/agroquímicos, caudal ecológico) a lo largo del horizonte.\n- Comparación con un escenario de inacción (nivel fijo pesimista).\n- Identificación de las implicaciones prácticas del resultado proyectado.",
+    },
+
     # ---- pdf_generator.py — Relatório Automático em PDF, modelo Resumido (Opção A) --------
     "pdf.a.titulo_pdf": {"pt": "Relatório de Qualidade da Água — {trecho} ({ano})", "en": "Water Quality Report — {trecho} ({ano})", "fr": "Rapport de Qualité de l'Eau — {trecho} ({ano})", "es": "Informe de Calidad del Agua — {trecho} ({ano})"},
     "pdf.a.titulo_pdf_todos": {"pt": "Relatório de Qualidade da Água — Todos os Trechos ({ano})", "en": "Water Quality Report — All Stretches ({ano})", "fr": "Rapport de Qualité de l'Eau — Tous les Tronçons ({ano})", "es": "Informe de Calidad del Agua — Todos los Tramos ({ano})"},
