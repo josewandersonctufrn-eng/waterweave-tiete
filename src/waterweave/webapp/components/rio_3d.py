@@ -1,23 +1,39 @@
 """Componente 3D cinematográfico (Three.js/WebGL) do ciclo poluição->restauração do Rio Tietê.
 
-Cena estilizada em tempo real (não fotorrealismo de VFX de longa-metragem —
-isso exigiria produção offline em Blender/Houdini + Unreal, incompatível com
-resposta ao vivo aos sliders do usuário). 100% pilotada pelos dados REAIS
-simulados pelo ABM (`models.abm.scenarios.rodar_cenario_customizado` +
-`models.biofisico.parametros_estendidos`).
+Cena estilizada em tempo real (não fotorrealismo de VFX de longa-metragem offline —
+isso exigiria produção em Blender/Houdini + path tracing, incompatível com resposta
+ao vivo aos sliders do usuário). Dentro do orçamento de um frame WebGL, a cena busca
+a maior fidelidade visual possível: shader de água com múltiplas camadas de tingimento,
+iluminação/neblina reativas e TODAS as transições suavizadas (lerp) para simular o
+tempo de resposta real de um corpo d'água, em vez de saltos rígidos entre anos.
+100% pilotada pelos dados REAIS simulados pelo ABM
+(`models.abm.scenarios.rodar_cenario_customizado` + `models.biofisico.parametros_estendidos`)
+— o JS nunca inventa valores, apenas os traduz visualmente.
 
-Mapeamento variável -> elemento visual (arquitetura do sistema):
+Tabela de mapeamento variável -> propriedade visual (Shaders / Partículas / Geometria):
 
-    Turbidez                         -> cor/opacidade da água (uSeverity/uTurbidez)
-    Turbidez + chuva + baixo esforço -> partículas de lama (plantação -> rio)
-    Sólidos Totais                   -> camada de assoreamento no leito
-    OD                                -> peixes (vivos, letárgicos ou de barriga p/ cima)
-    DBO/severidade + Metais           -> espuma química + filme de óleo na superfície
-    pH (distância de 7)               -> vegetação marginal murcha (+ severidade)
-    Nutrientes (Fósforo+Nitrogênio)   -> floração de algas na superfície (eutrofização)
-    Vazão (normalizada na sessão)     -> nível d'água, largura do canal, bancos de areia
-    Índice de escoamento (chuva real) -> sistema de partículas de chuva
-    Esgoto industrial/doméstico       -> 2 tubulações com despejo (indústria + residências)
+    Grupo                    Parâmetro (entrada real)         Propriedade visual afetada
+    ------------------------ ------------------------------- --------------------------------------------
+    Sedimentos/Erosão        Turbidez (NTU)                   uSeverity/uTurbidez (cor+alpha da água),
+                                                                brilho especular (menos "glint" com água turva)
+                             Sólidos Totais (mg/L)             opacidade da camada de assoreamento no leito
+                             Turbidez+chuva+baixo esforço      partículas de lama (plantação -> rio)
+    Esgoto/Efluentes         Oxigênio Dissolvido (mg/L)        opacidade das bolhas de oxigenação; transição
+                                                                gradual peixes ativos -> letárgicos -> boiando
+                             DBO (mg/L) + severidade geral     espuma química na água (uSeverity)
+                             Metais/Tóxicos (índice)           filme de óleo na superfície (opacity)
+                             pH (distância de 7,0)             tingimento acinzentado/esverdeado da água
+                                                                (uPhDistancia) + murchamento da vegetação
+    Fertilizantes/Agrotóxicos Nutrientes (P+N, mg/L)           opacidade da floração de algas (eutrofização)
+                             Agrotóxicos/Metais                vigor de cor da plantação (verde -> baço)
+    Vazão ecológica          Vazão fluvial (m³/s, normalizada) nível/largura do canal (water level plane);
+                                                                emersão gradual de bancos de areia/pedra
+                             Índice de escoamento (chuva real) contagem/velocidade das partículas de chuva
+
+Todas as propriedades acima são pilotadas por um par de variáveis "alvo/suavizada"
+por quadro (`*Alvo` = valor-alvo do ano corrente; `*Suave` = valor real aplicado à
+cena, que persegue o alvo com `lerp` a cada frame em `loop()`) — assim a transição
+entre anos (ou entre cenário controlado/não controlado) nunca é instantânea.
 
 Uso:
     from waterweave.webapp.components.rio_3d import renderizar_html
@@ -178,8 +194,10 @@ const aguaUniforms = {
   uTime: { value: 0 },
   uSeverity: { value: 0.0 },
   uTurbidez: { value: 0.1 },
+  uPhDistancia: { value: 0.0 },
   uCorLimpa: { value: new THREE.Color(0x1c7fae) },
   uCorPoluida: { value: new THREE.Color(0x5a4a34) },
+  uCorPhDesvio: { value: new THREE.Color(0x5c6b5a) },
 };
 const aguaMat = new THREE.ShaderMaterial({
   uniforms: aguaUniforms,
@@ -202,20 +220,27 @@ const aguaMat = new THREE.ShaderMaterial({
   fragmentShader: `
     uniform float uSeverity;
     uniform float uTurbidez;
+    uniform float uPhDistancia;
     uniform vec3 uCorLimpa;
     uniform vec3 uCorPoluida;
+    uniform vec3 uCorPhDesvio;
     varying vec2 vUv;
     varying float vOnda;
     float ruido(vec2 c){ return fract(sin(dot(c, vec2(12.9898,78.233))) * 43758.5453); }
     void main() {
       float misturaCor = pow(uSeverity, 0.6);
       vec3 cor = mix(uCorLimpa, uCorPoluida, misturaCor);
-      float brilho = smoothstep(0.02, 0.09, vOnda) * (1.0 - uSeverity * 0.6);
+      // pH fora da faixa neutra (7,0): desvio secundário de tonalidade acinzentado/esverdeado,
+      // independente da severidade geral (ex.: efluente ácido/alcalino sem DBO alta)
+      cor = mix(cor, uCorPhDesvio, uPhDistancia * 0.35);
+      // brilho especular: água limpa reflete mais luz; turbidez e severidade absorvem/dispersam o brilho
+      float brilho = smoothstep(0.02, 0.09, vOnda) * (1.0 - uSeverity * 0.6) * (1.0 - uTurbidez * 0.5);
       cor += brilho * 0.35;
       float espumaRuido = ruido(floor(vUv * 90.0));
       float espuma = step(0.965, espumaRuido) * smoothstep(0.3, 0.9, uSeverity);
       cor = mix(cor, vec3(0.75, 0.72, 0.62), espuma);
-      float alpha = 0.82 + uTurbidez * 0.16;
+      // alpha: água turva esconde progressivamente o leito (menos transmissão de luz)
+      float alpha = 0.78 + uTurbidez * 0.2 + uSeverity * 0.04;
       gl_FragColor = vec4(cor, alpha);
     }
   `,
@@ -232,14 +257,16 @@ sedimentoLeito.rotation.x = -Math.PI / 2;
 sedimentoLeito.position.y = -0.18;
 scene.add(sedimentoLeito);
 
-// Bancos de areia/pedra expostos quando a vazão cai abaixo do necessário
+// Bancos de areia/pedra que emergem gradualmente quando a vazão cai abaixo do necessário
+// (opacidade + altura crescem de forma contínua com a vazão suavizada — ver loop() — em vez
+// de um "pop" binário de visibilidade)
 const bancosAreia = [];
 const bancoGeo = new THREE.SphereGeometry(1, 12, 6);
 const posicoesBanco = [[-14, -1.5], [3, 2.0], [16, -1.0]];
 for (const [bx, bz] of posicoesBanco) {
-  const m = new THREE.Mesh(bancoGeo, new THREE.MeshStandardMaterial({ color: 0xcbb583, roughness: 1.0 }));
+  const m = new THREE.Mesh(bancoGeo, new THREE.MeshStandardMaterial({ color: 0xcbb583, roughness: 1.0, transparent: true, opacity: 0.0 }));
   m.position.set(bx, -0.55, bz);
-  m.scale.set(2.4, 0.22, 1.5);
+  m.scale.set(2.4, 0.06, 1.5);
   m.visible = false;
   scene.add(m);
   bancosAreia.push(m);
@@ -451,6 +478,17 @@ canvas.addEventListener('wheel', (e) => {
   ultimaInteracao = t;
 }, { passive: false });
 
+// Paletas de cor reutilizadas a cada frame (evita recriar THREE.Color() 60x/s)
+const corSolLimpo = new THREE.Color(0xfff3d6);
+const corSolPoluido = new THREE.Color(0x8fa3ad);
+const corFogLimpo = new THREE.Color(0xbfe0f5);
+const corFogPoluido = new THREE.Color(0x7c7566);
+const corVegVivo = new THREE.Color(0x4a8a3a);
+const corVegSeca = new THREE.Color(0x6b5a34);
+const corPlantaViva = new THREE.Color(0x5fae3d);
+const corPlantaFraca = new THREE.Color(0x8a8a4a);
+const _corFogAtual = new THREE.Color();
+
 // ---------------------------------------------------------------------------
 // Estado / animação
 // ---------------------------------------------------------------------------
@@ -460,6 +498,18 @@ let nivelAguaAlvo = 0;
 let escalaAguaAlvo = 1;
 let chuvaAtivaAlvo = 0;
 let lamaAtivaAlvo = 0;
+
+// Alvos (definidos 1x por ano, em atualizarParaAno) e valores suavizados (perseguem o
+// alvo a cada frame em loop() via lerp) — toda a cena reage com transição contínua,
+// nunca instantânea, conforme requisito de fidelidade natural da resposta do rio.
+let severidadeAlvo = 0, turbidezAlvo = 0.1, solidosAlvo = 0, odNormAlvo = 1, odMgLAlvo = 6;
+let nutrienteAlvo = 0, metaisAlvo = 0, phDistAlvo = 0, bioticoAlvo = 0.5;
+let vazaoNormAlvo = 0.5, escoamentoNormAlvo = 0;
+
+let severidadeSuave = 0, turbidezSuave = 0.1, solidosSuave = 0, odNormSuave = 1, odMgLSuave = 6;
+let nutrienteSuave = 0, metaisSuave = 0, phDistSuave = 0, bioticoSuave = 0.5;
+let vazaoNormSuave = 0.5, escoamentoNormSuave = 0;
+const TAXA_SUAVIZACAO = 0.035; // ~poucos segundos p/ resposta plena, sem saltos rígidos
 
 function metricaLinha(nome, valor, unidade) {
   return nome + ": <b>" + valor + (unidade ? (" " + unidade) : "") + "</b>";
@@ -482,35 +532,20 @@ function atualizarParaAno(ano) {
   const escoamentoNorm = normalizar(linha.indice_escoamento_mm, FAIXA_ESCOAMENTO);
   const phDistancia = Math.max(0, Math.min(1, Math.abs(linha.ph - 7.0) / 1.8));
 
-  aguaUniforms.uSeverity.value = severidade;
-  aguaUniforms.uTurbidez.value = turbidezNorm;
-
-  // Iluminação: quente/brilhante (limpo) <-> fria/opaca (poluído); mais nublado com chuva forte
-  const corSolLimpo = new THREE.Color(0xfff3d6);
-  const corSolPoluido = new THREE.Color(0x8fa3ad);
-  sol.color.copy(corSolLimpo).lerp(corSolPoluido, Math.max(severidade, escoamentoNorm * 0.5));
-  sol.intensity = 1.6 - severidade * 0.9 - escoamentoNorm * 0.3;
-  const corFogLimpo = new THREE.Color(0xbfe0f5);
-  const corFogPoluido = new THREE.Color(0x7c7566);
-  const corFogAtual = corFogLimpo.clone().lerp(corFogPoluido, severidade);
-  scene.fog.color.copy(corFogAtual);
-  renderer.setClearColor(corFogAtual, 1.0);
-
-  // Despejo das 2 tubulações (indústria + residências): ativo proporcional à severidade
-  despejoIndustrial.mat.opacity = 0.55 * severidade;
-  despejoDomestico.mat.opacity = 0.5 * severidade;
-
-  // Bolhas de oxigenação: proporcional ao OD real
-  bolhasMat.opacity = 0.75 * odNorm;
-
-  // Algas (eutrofização): proporcional a Fósforo+Nitrogênio
-  algasMat.opacity = 0.75 * Math.pow(nutrienteNorm, 1.3);
-
-  // Filme de óleo / espuma química: proporcional a Metais/Tóxicos e à severidade orgânica
-  oleoMat.opacity = 0.6 * Math.max(metaisNorm, severidade * 0.5);
-
-  // Sedimento no leito: proporcional a Sólidos Totais
-  sedimentoLeitoMat.opacity = 0.55 * solidosNorm;
+  // Define apenas os ALVOS do ano; a aplicação real na cena (cores, opacidades, geometria)
+  // acontece em loop(), suavizada quadro a quadro (ver TAXA_SUAVIZACAO) — assim a transição
+  // entre anos/cenários nunca é um salto rígido, e sim uma resposta gradual da natureza.
+  severidadeAlvo = severidade;
+  turbidezAlvo = turbidezNorm;
+  solidosAlvo = solidosNorm;
+  odNormAlvo = odNorm;
+  odMgLAlvo = linha.od_mg_l;
+  nutrienteAlvo = nutrienteNorm;
+  metaisAlvo = metaisNorm;
+  phDistAlvo = phDistancia;
+  bioticoAlvo = bioticoNorm;
+  vazaoNormAlvo = vazaoNorm;
+  escoamentoNormAlvo = escoamentoNorm;
 
   // Chuva: intensidade real do balanço hídrico do ano/cenário
   chuvaAtivaAlvo = escoamentoNorm;
@@ -521,29 +556,6 @@ function atualizarParaAno(ano) {
   // Nível d'água e canal: cai e estreita quando a vazão fica abaixo do necessário
   nivelAguaAlvo = -0.55 * (1 - vazaoNorm);
   escalaAguaAlvo = 0.62 + 0.38 * vazaoNorm;
-  bancosAreia.forEach((b) => { b.visible = vazaoNorm < 0.45; });
-
-  // Vegetação: verde viçoso <-> seco/acastanhado (severidade + pH fora da faixa neutra)
-  const corVegVivo = new THREE.Color(0x4a8a3a);
-  const corVegSeca = new THREE.Color(0x6b5a34);
-  const murchamento = Math.min(1, severidade * 0.7 + phDistancia * 0.5);
-  vegetacao.forEach((v) => {
-    v.material.color.copy(corVegVivo).lerp(corVegSeca, murchamento);
-    v.scale.y = 0.7 + bioticoNorm * 0.5;
-  });
-
-  // Plantação: viçosa quando bem cuidada; some de vigor visual se o solo já está exaurido (proxy: metais/solidos)
-  const corPlantaViva = new THREE.Color(0x5fae3d);
-  const corPlantaFraca = new THREE.Color(0x8a8a4a);
-  plantacaoMats.forEach((m) => m.color.copy(corPlantaViva).lerp(corPlantaFraca, metaisNorm * 0.5));
-
-  // Peixes: vivos/ativos conforme índice biótico; boiam de barriga p/ cima se OD crítico
-  const odCritico = linha.od_mg_l < 2.0;
-  peixes.forEach((p) => {
-    p.visible = bioticoNorm > 0.08 || odCritico;
-    p.userData.morto = odCritico;
-    p.userData.profAlvo = odCritico ? -0.02 : (-0.4 - (1 - bioticoNorm) * 1.6);
-  });
 
   document.querySelector('#painel .ano').textContent = TEXTOS.ano + " " + ano;
   document.querySelector('#painel .fase').textContent = fase(linha.iqa, linhaAnterior ? linhaAnterior.iqa : null)
@@ -608,6 +620,76 @@ function loop() {
   requestAnimationFrame(loop);
   t += 0.016;
   aguaUniforms.uTime.value = t;
+
+  // Suavização: cada valor "Suave" persegue seu alvo do ano corrente a cada quadro —
+  // é isso que dá à cena a sensação de resposta natural/gradual, em vez de saltos rígidos.
+  severidadeSuave += (severidadeAlvo - severidadeSuave) * TAXA_SUAVIZACAO;
+  turbidezSuave += (turbidezAlvo - turbidezSuave) * TAXA_SUAVIZACAO;
+  solidosSuave += (solidosAlvo - solidosSuave) * TAXA_SUAVIZACAO;
+  odNormSuave += (odNormAlvo - odNormSuave) * TAXA_SUAVIZACAO;
+  odMgLSuave += (odMgLAlvo - odMgLSuave) * TAXA_SUAVIZACAO;
+  nutrienteSuave += (nutrienteAlvo - nutrienteSuave) * TAXA_SUAVIZACAO;
+  metaisSuave += (metaisAlvo - metaisSuave) * TAXA_SUAVIZACAO;
+  phDistSuave += (phDistAlvo - phDistSuave) * TAXA_SUAVIZACAO;
+  bioticoSuave += (bioticoAlvo - bioticoSuave) * TAXA_SUAVIZACAO;
+  vazaoNormSuave += (vazaoNormAlvo - vazaoNormSuave) * TAXA_SUAVIZACAO;
+  escoamentoNormSuave += (escoamentoNormAlvo - escoamentoNormSuave) * TAXA_SUAVIZACAO;
+
+  // Água: cor/opacidade/tingimento de pH (shader) reagem à turbidez/severidade/pH suavizados
+  aguaUniforms.uSeverity.value = severidadeSuave;
+  aguaUniforms.uTurbidez.value = turbidezSuave;
+  aguaUniforms.uPhDistancia.value = phDistSuave;
+
+  // Iluminação: quente/brilhante (limpo) <-> fria/opaca (poluído); mais nublado com chuva forte
+  sol.color.copy(corSolLimpo).lerp(corSolPoluido, Math.max(severidadeSuave, escoamentoNormSuave * 0.5));
+  sol.intensity = 1.6 - severidadeSuave * 0.9 - escoamentoNormSuave * 0.3;
+  _corFogAtual.copy(corFogLimpo).lerp(corFogPoluido, severidadeSuave);
+  scene.fog.color.copy(_corFogAtual);
+  renderer.setClearColor(_corFogAtual, 1.0);
+
+  // Despejo das 2 tubulações (indústria + residências): ativo proporcional à severidade
+  despejoIndustrial.mat.opacity = 0.55 * severidadeSuave;
+  despejoDomestico.mat.opacity = 0.5 * severidadeSuave;
+
+  // Bolhas de oxigenação: proporcional ao OD real
+  bolhasMat.opacity = 0.75 * odNormSuave;
+
+  // Algas (eutrofização): proporcional a Fósforo+Nitrogênio
+  algasMat.opacity = 0.75 * Math.pow(nutrienteSuave, 1.3);
+
+  // Filme de óleo / espuma química: proporcional a Metais/Tóxicos e à severidade orgânica
+  oleoMat.opacity = 0.6 * Math.max(metaisSuave, severidadeSuave * 0.5);
+
+  // Sedimento no leito: proporcional a Sólidos Totais
+  sedimentoLeitoMat.opacity = 0.55 * solidosSuave;
+
+  // Vegetação: verde viçoso <-> seco/acastanhado (severidade + pH fora da faixa neutra)
+  const murchamento = Math.min(1, severidadeSuave * 0.7 + phDistSuave * 0.5);
+  vegetacao.forEach((v) => {
+    v.material.color.copy(corVegVivo).lerp(corVegSeca, murchamento);
+    v.scale.y = 0.7 + bioticoSuave * 0.5;
+  });
+
+  // Plantação: viçosa quando bem cuidada; some de vigor visual se o solo já está exaurido (proxy: metais)
+  plantacaoMats.forEach((m) => m.color.copy(corPlantaViva).lerp(corPlantaFraca, metaisSuave * 0.5));
+
+  // Bancos de areia/pedra: emergem gradualmente (opacidade + altura) conforme a vazão
+  // suavizada cai abaixo do mínimo ecológico — sem "pop" binário de visibilidade
+  const emersaoAlvo = Math.max(0, Math.min(1, (0.45 - vazaoNormSuave) / 0.25));
+  bancosAreia.forEach((b) => {
+    b.material.opacity += (emersaoAlvo - b.material.opacity) * 0.05;
+    b.scale.y = 0.06 + 0.16 * b.material.opacity;
+    b.visible = b.material.opacity > 0.02;
+  });
+
+  // Peixes: usa OD suavizado (mg/L) para transição gradual entre saudável e crítico —
+  // evita que peixes "piscam" entre vivos/mortos ao trocar de ano
+  const odCriticoSuave = Math.max(0, Math.min(1, (2.0 - odMgLSuave) / 1.0));
+  peixes.forEach((p) => {
+    p.visible = bioticoSuave > 0.08 || odCriticoSuave > 0.3;
+    p.userData.morto = odCriticoSuave > 0.5;
+    p.userData.profAlvo = -0.02 * odCriticoSuave + (-0.4 - (1 - bioticoSuave) * 1.6) * (1 - odCriticoSuave);
+  });
 
   // câmera: usuário arrasta para girar e usa a roda para zoom; em repouso (>2s sem
   // interação), a órbita cinematográfica automática retoma suavemente (sem saltos,
