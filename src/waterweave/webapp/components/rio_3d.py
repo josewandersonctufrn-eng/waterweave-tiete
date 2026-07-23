@@ -91,6 +91,24 @@ _TEMPLATE = r"""
     transition: opacity 0.6s ease;
   }
   #cena { touch-action: none; }
+  #legendaCor {
+    position: absolute; left: 50%; bottom: 50px; z-index: 10; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  }
+  #legendaCorTitulo { color: #f2f1ee; font-size: 9.5px; opacity: 0.85; white-space: nowrap; }
+  #legendaCorBarraWrap { position: relative; width: 230px; height: 8px; margin-top: 1px; }
+  #legendaCorBarra {
+    width: 100%; height: 100%; border-radius: 4px; border: 1px solid rgba(255,255,255,0.35);
+    background: linear-gradient(to right, #2f9fce 0%, #7fae8a 35%, #c9a24a 65%, #5a4a34 100%);
+  }
+  #legendaCorMarcador {
+    position: absolute; top: -5px; width: 0; height: 0; transform: translateX(-50%); left: 0%;
+    border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid #ffffff;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7)); transition: left 0.3s ease;
+  }
+  #legendaCorRotulos { display: flex; justify-content: space-between; width: 230px; color: #f2f1ee; font-size: 9px; opacity: 0.9; }
+  #legendaCorStatus { font-size: 11.5px; font-weight: 700; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -100,6 +118,15 @@ _TEMPLATE = r"""
   <div id="metricas"></div>
   <div id="legenda">__LEGENDA__</div>
   <div id="dicaCamera">__DICA_CAMERA__</div>
+  <div id="legendaCor">
+    <div id="legendaCorTitulo">__LEGENDA_COR_TITULO__</div>
+    <div id="legendaCorBarraWrap">
+      <div id="legendaCorBarra"></div>
+      <div id="legendaCorMarcador"></div>
+    </div>
+    <div id="legendaCorRotulos"><span>__LEGENDA_COR_FORA__</span><span>__LEGENDA_COR_EM__</span></div>
+    <div id="legendaCorStatus"></div>
+  </div>
   <canvas id="cena"></canvas>
   <div id="controles">
     <button id="btnPlay" title="__BOTAO_REPRODUZIR__">▶</button>
@@ -128,6 +155,17 @@ function fase(iqaAtual, iqaAnterior) {
   if (iqaAnterior !== null && iqaAtual - iqaAnterior > 1.5) return TEXTOS.fase_tratamento;
   if (iqaAnterior !== null && iqaAtual - iqaAnterior < -1.5) return TEXTOS.fase_poluicao;
   return TEXTOS.fase_critico;
+}
+
+// Mesmos limiares de `waterweave.thresholds.status_para_iqa` (Bom/Atenção/Sério/Crítico),
+// replicados aqui só para pilotar a legenda de cor da água — a classificação oficial
+// (usada no relatório PDF e nos KPIs) continua vindo do Python, isto é apenas leitura.
+const CORES_STATUS = { bom: '#0ca30c', atencao: '#fab219', serio: '#ec835a', critico: '#d03b3b' };
+function classificarIqa(iqa) {
+  if (iqa >= 70) return 'bom';
+  if (iqa >= 50) return 'atencao';
+  if (iqa >= 25) return 'serio';
+  return 'critico';
 }
 
 // Faixas reais (ambas as séries) para normalizar vazão e chuva de forma consistente --------
@@ -560,6 +598,16 @@ function atualizarParaAno(ano) {
   document.querySelector('#painel .ano').textContent = TEXTOS.ano + " " + ano;
   document.querySelector('#painel .fase').textContent = fase(linha.iqa, linhaAnterior ? linhaAnterior.iqa : null)
     + (usarNaoControlado ? ("  ·  " + TEXTOS.cenario_nao_controlado) : ("  ·  " + TEXTOS.cenario_controlado));
+
+  // Legenda de cor da água: move o marcador na barra (mesmo gradiente azul->marrom do
+  // shader) e mostra a classificação oficial (Bom/Atenção/Sério/Crítico + Fora/Em risco)
+  // do ano corrente — a mesma lógica de `thresholds.status_para_iqa` usada no resto do app.
+  const chaveStatus = classificarIqa(linha.iqa);
+  document.getElementById('legendaCorMarcador').style.left = (100 - Math.max(0, Math.min(100, linha.iqa))) + '%';
+  const statusEl = document.getElementById('legendaCorStatus');
+  const rotuloRisco = chaveStatus === 'bom' ? TEXTOS.legenda_cor_fora : TEXTOS.legenda_cor_em;
+  statusEl.textContent = rotuloRisco + ' · ' + TEXTOS['status_' + chaveStatus];
+  statusEl.style.color = CORES_STATUS[chaveStatus];
   document.getElementById('metricas').innerHTML = [
     metricaLinha(TEXTOS.metrica_iqa, linha.iqa.toFixed(0)),
     metricaLinha(TEXTOS.metrica_od, linha.od_mg_l.toFixed(2), "mg/L"),
@@ -814,6 +862,13 @@ _TEXTOS_PADRAO = {
     "botao_reproduzir": "Reproduzir/Pausar",
     "botao_pausar": "Reproduzir/Pausar",
     "dica_camera": "🖱️ arraste para girar · roda para aproximar",
+    "legenda_cor_titulo": "Cor da água = classificação",
+    "legenda_cor_fora": "Fora de risco",
+    "legenda_cor_em": "Em risco",
+    "status_bom": "Bom",
+    "status_atencao": "Atenção",
+    "status_serio": "Sério",
+    "status_critico": "Crítico",
 }
 
 
@@ -844,4 +899,7 @@ def renderizar_html(
     html = html.replace("__BOTAO_REPRODUZIR__", textos_finais["botao_reproduzir"])
     html = html.replace("__VER_SEM_CONTROLE__", textos_finais["ver_sem_controle"])
     html = html.replace("__DICA_CAMERA__", textos_finais["dica_camera"])
+    html = html.replace("__LEGENDA_COR_TITULO__", textos_finais["legenda_cor_titulo"])
+    html = html.replace("__LEGENDA_COR_FORA__", textos_finais["legenda_cor_fora"])
+    html = html.replace("__LEGENDA_COR_EM__", textos_finais["legenda_cor_em"])
     return html

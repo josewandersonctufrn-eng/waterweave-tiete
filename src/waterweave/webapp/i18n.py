@@ -378,11 +378,20 @@ _T: dict[str, dict[str, str]] = {
         "es": "Simulación real vía ABM (Mesa) + balance hídrico + Streeter-Phelps, con submodelos extendidos de Turbidez/Sólidos/Temperatura/pH/Fósforo/Nitrógeno/E. coli/Metales/Índice Biótico, anclados en promedios reales 2012-2024 de la CETESB. El escenario 'no controlado' es un nivel fijo pesimista definido en esta página. Cada tramo se simula de forma independiente, sin propagar carga/caudal de aguas arriba hacia aguas abajo. El ICA es un proxy simplificado de OD/DBO, no el ICA oficial de 9 parámetros. El Índice Biótico (macroinvertebrados/peces) y el índice de Metales/Tóxicos son proxies ilustrativos que combinan los demás parámetros simulados — el proyecto no tiene datos reales de biomonitoreo ni una serie completa de metales individuales incorporada al pipeline. La escena 3D (industria, viviendas, cultivos, lluvia, sedimentación, algas, bancos de arena) es estilizada en tiempo real, no fotorrealista — cada elemento responde a una variable simulada específica, no es una animación decorativa suelta.",
     },
     "cf.tende_a_ficar": {"pt": "tende a ficar", "en": "tends to become", "fr": "tend à devenir", "es": "tiende a quedar"},
+    "cf.dica_cor_agua": {
+        "pt": "💡 A cor da água na cena 3D muda em tempo real: veja a legenda no rodapé da animação para saber o que cada tom significa.",
+        "en": "💡 The water color in the 3D scene changes in real time: see the legend at the bottom of the animation to know what each shade means.",
+        "fr": "💡 La couleur de l'eau dans la scène 3D change en temps réel : consultez la légende en bas de l'animation pour savoir ce que chaque teinte signifie.",
+        "es": "💡 El color del agua en la escena 3D cambia en tiempo real: vea la leyenda al pie de la animación para saber qué significa cada tono.",
+    },
 
     # ---- Cena 3D — components/rio_3d.py (texto embutido no HTML/JS) ----------------------
     "r3d.carregando": {"pt": "Carregando cena…", "en": "Loading scene…", "fr": "Chargement de la scène…", "es": "Cargando escena…"},
     "r3d.legenda": {"pt": "🏭 Indústria &nbsp; 🏘️ Residências &nbsp; 🌾 Plantação &nbsp; 🌧️ Chuva", "en": "🏭 Industry &nbsp; 🏘️ Housing &nbsp; 🌾 Farmland &nbsp; 🌧️ Rain", "fr": "🏭 Industrie &nbsp; 🏘️ Logements &nbsp; 🌾 Terres agricoles &nbsp; 🌧️ Pluie", "es": "🏭 Industria &nbsp; 🏘️ Viviendas &nbsp; 🌾 Cultivos &nbsp; 🌧️ Lluvia"},
     "r3d.ver_sem_controle": {"pt": "ver sem controle", "en": "view without control", "fr": "voir sans contrôle", "es": "ver sin control"},
+    "r3d.legenda_cor.titulo": {"pt": "Cor da água = classificação", "en": "Water color = classification", "fr": "Couleur de l'eau = classification", "es": "Color del agua = clasificación"},
+    "r3d.legenda_cor.fora_risco": {"pt": "Fora de risco", "en": "Out of risk", "fr": "Hors risque", "es": "Fuera de riesgo"},
+    "r3d.legenda_cor.em_risco": {"pt": "Em risco", "en": "At risk", "fr": "À risque", "es": "En riesgo"},
     "r3d.ano": {"pt": "Ano", "en": "Year", "fr": "Année", "es": "Año"},
     "r3d.cenario_controlado": {"pt": "cenário controlado", "en": "controlled scenario", "fr": "scénario contrôlé", "es": "escenario controlado"},
     "r3d.cenario_nao_controlado": {"pt": "cenário não controlado", "en": "uncontrolled scenario", "fr": "scénario non contrôlé", "es": "escenario no controlado"},

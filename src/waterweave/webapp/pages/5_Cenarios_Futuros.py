@@ -121,42 +121,46 @@ with col_clima:
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Fatores da água — o usuário escolhe o que priorizar controlar
+# Fatores da água (esquerda, em abas para caber ao lado da cena) + animação 3D
+# (direita) lado a lado — assim qualquer ajuste de slider mostra a mudança na
+# cor da água sem precisar rolar a página para cima e para baixo.
 # ---------------------------------------------------------------------------
 st.markdown(f"### {i18n.t('cf.pergunta_priorizar')}")
 
-col_fis, col_quim, col_bio = st.columns(3)
+col_controles, col_cena = st.columns([1, 1.6], gap="large")
 
-with col_fis:
-    st.markdown(f"**{i18n.t('cf.fatores_fisicos')}**")
-    st.caption(i18n.t("cf.fatores_fisicos.desc"))
-    st.markdown(i18n.t("cf.fatores_fisicos.itens"))
-    controlar_fisico = st.checkbox(i18n.t("cf.controlar_sedimentos"), value=True)
-    esforco_fisico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_fisico", disabled=not controlar_fisico)
-    _selo_impacto(i18n.t("cf.turbidez_solidos"), esforco_fisico if controlar_fisico else 0)
-    st.caption(i18n.t("cf.temperatura_nota"))
+with col_controles:
+    tab_fis, tab_quim, tab_bio = st.tabs([
+        i18n.t("cf.fatores_fisicos"), i18n.t("cf.fatores_quimicos"), i18n.t("cf.fatores_biologicos"),
+    ])
 
-with col_quim:
-    st.markdown(f"**{i18n.t('cf.fatores_quimicos')}**")
-    st.caption(i18n.t("cf.fatores_quimicos.desc"))
-    st.markdown(i18n.t("cf.fatores_quimicos.itens"))
-    controlar_organico = st.checkbox(i18n.t("cf.controlar_esgoto"), value=True)
-    esforco_organico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_organico", disabled=not controlar_organico)
-    _selo_impacto(i18n.t("cf.esgoto_od_dbo"), esforco_organico if controlar_organico else 0)
-    controlar_nutrientes = st.checkbox(i18n.t("cf.controlar_fertilizantes"), value=True)
-    esforco_nutrientes = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_nutrientes", disabled=not controlar_nutrientes)
-    _selo_impacto(i18n.t("cf.nutrientes_eutrofizacao"), esforco_nutrientes if controlar_nutrientes else 0)
+    with tab_fis:
+        st.caption(i18n.t("cf.fatores_fisicos.desc"))
+        st.markdown(i18n.t("cf.fatores_fisicos.itens"))
+        controlar_fisico = st.checkbox(i18n.t("cf.controlar_sedimentos"), value=True)
+        esforco_fisico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_fisico", disabled=not controlar_fisico)
+        _selo_impacto(i18n.t("cf.turbidez_solidos"), esforco_fisico if controlar_fisico else 0)
+        st.caption(i18n.t("cf.temperatura_nota"))
 
-with col_bio:
-    st.markdown(f"**{i18n.t('cf.fatores_biologicos')}**")
-    st.caption(i18n.t("cf.fatores_biologicos.desc"))
-    st.markdown(i18n.t("cf.fatores_biologicos.itens"))
-    st.caption(i18n.t("cf.biologicos_nota"))
-    outorga_piso = st.slider(
-        i18n.t("cf.vazao_ecologica"), 0.30, 0.95, 0.60, step=0.05, format="%.2f",
-        help=i18n.t("cf.vazao_help"),
-    )
-    _selo_impacto(i18n.t("cf.diluicao_vazao"), (outorga_piso - 0.30) / 0.65 * 100, cor_ruim=_COR_ESCASSEZ)
+    with tab_quim:
+        st.caption(i18n.t("cf.fatores_quimicos.desc"))
+        st.markdown(i18n.t("cf.fatores_quimicos.itens"))
+        controlar_organico = st.checkbox(i18n.t("cf.controlar_esgoto"), value=True)
+        esforco_organico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_organico", disabled=not controlar_organico)
+        _selo_impacto(i18n.t("cf.esgoto_od_dbo"), esforco_organico if controlar_organico else 0)
+        controlar_nutrientes = st.checkbox(i18n.t("cf.controlar_fertilizantes"), value=True)
+        esforco_nutrientes = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_nutrientes", disabled=not controlar_nutrientes)
+        _selo_impacto(i18n.t("cf.nutrientes_eutrofizacao"), esforco_nutrientes if controlar_nutrientes else 0)
+
+    with tab_bio:
+        st.caption(i18n.t("cf.fatores_biologicos.desc"))
+        st.markdown(i18n.t("cf.fatores_biologicos.itens"))
+        st.caption(i18n.t("cf.biologicos_nota"))
+        outorga_piso = st.slider(
+            i18n.t("cf.vazao_ecologica"), 0.30, 0.95, 0.60, step=0.05, format="%.2f",
+            help=i18n.t("cf.vazao_help"),
+        )
+        _selo_impacto(i18n.t("cf.diluicao_vazao"), (outorga_piso - 0.30) / 0.65 * 100, cor_ruim=_COR_ESCASSEZ)
 
 esforco_sedimentar = esforco_fisico if controlar_fisico else 0
 esforco_esgoto = esforco_organico if controlar_organico else 0
@@ -172,8 +176,6 @@ CONTROLADO_PARAMS = dict(
     reducao_agricola=0.99 - 0.14 * (max(esforco_agricola, esforco_sedimentar) / 100),
     piso_fator_difusa=0.90 - 0.50 * (max(esforco_agricola, esforco_sedimentar) / 100),
 )
-
-st.divider()
 
 # ---------------------------------------------------------------------------
 # Executa o ABM (cacheado) e prepara a série anual para a cena 3D
@@ -221,22 +223,32 @@ textos_cena = {
     "botao_reproduzir": i18n.t("r3d.botao_reproduzir"),
     "botao_pausar": i18n.t("r3d.botao_pausar"),
     "dica_camera": i18n.t("r3d.dica_camera"),
+    "legenda_cor_titulo": i18n.t("r3d.legenda_cor.titulo"),
+    "legenda_cor_fora": i18n.t("r3d.legenda_cor.fora_risco"),
+    "legenda_cor_em": i18n.t("r3d.legenda_cor.em_risco"),
+    "status_bom": i18n.t("status.bom"),
+    "status_atencao": i18n.t("status.atencao"),
+    "status_serio": i18n.t("status.serio"),
+    "status_critico": i18n.t("status.critico"),
 }
 
 html = renderizar_html(serie_c, serie_nc, ano_min=1, ano_max=horizonte_anos, altura_px=620, textos=textos_cena)
-components.html(html, height=640, scrolling=False)
 
-config_relatorio = dict(
-    esforco_sedimentar=esforco_sedimentar, esforco_esgoto=esforco_esgoto, esforco_agricola=esforco_agricola,
-    outorga_piso=outorga_piso, clima_pct=clima_pct,
-)
-pdf_bytes = gerar_relatorio_cenario_pdf(theme.TRECHO_LABEL[trecho_id], horizonte_anos, config_relatorio, serie_c, serie_nc)
-st.download_button(
-    i18n.t("cf.baixar_pdf"),
-    data=pdf_bytes,
-    file_name=f"cenario_{trecho_id}_{horizonte_anos}anos.pdf",
-    mime="application/pdf",
-)
+with col_cena:
+    st.caption(i18n.t("cf.dica_cor_agua"))
+    components.html(html, height=640, scrolling=False)
+
+    config_relatorio = dict(
+        esforco_sedimentar=esforco_sedimentar, esforco_esgoto=esforco_esgoto, esforco_agricola=esforco_agricola,
+        outorga_piso=outorga_piso, clima_pct=clima_pct,
+    )
+    pdf_bytes = gerar_relatorio_cenario_pdf(theme.TRECHO_LABEL[trecho_id], horizonte_anos, config_relatorio, serie_c, serie_nc)
+    st.download_button(
+        i18n.t("cf.baixar_pdf"),
+        data=pdf_bytes,
+        file_name=f"cenario_{trecho_id}_{horizonte_anos}anos.pdf",
+        mime="application/pdf",
+    )
 
 with st.expander(i18n.t("cf.como_calculado")):
     st.markdown(i18n.t("cf.como_calculado.texto"))
