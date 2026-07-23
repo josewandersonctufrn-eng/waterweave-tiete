@@ -24,6 +24,8 @@ import streamlit.components.v1 as components
 
 from waterweave.config import TRECHOS
 from waterweave.models.abm.scenarios import rodar_cenario_customizado
+from waterweave.reports.pdf_generator import gerar_relatorio_cenario_pdf
+from waterweave.thresholds import STATUS, status_para_iqa
 from waterweave.webapp import theme
 from waterweave.webapp.components.rio_3d import renderizar_html
 
@@ -40,6 +42,50 @@ CAMPOS_SAIDA = [
     "iqa", "od_mg_l", "dbo_mg_l", "turbidez_ntu", "solidos_totais_mg_l", "temperatura_c",
     "ph", "fosforo_mg_l", "nitrogenio_mg_l", "metais_toxicos_indice", "e_coli_nmp_100ml", "indice_biotico",
 ]
+
+# ---------------------------------------------------------------------------
+# Feedback visual instantâneo: um selo com a cor que a água tenderia a ter,
+# atualizado a cada interação (Streamlit reexecuta o script a cada mudança de
+# slider/checkbox) — não espera a simulação completa do ABM rodar, é a mesma
+# lógica de cor usada na cena 3D (`webapp.components.rio_3d`), calculada aqui
+# de forma direta e instantânea para dar resposta imediata ao usuário.
+# ---------------------------------------------------------------------------
+_COR_LIMPA = (28, 127, 174)
+_COR_POLUIDA = (90, 74, 52)
+_COR_SECA = (191, 130, 43)
+_COR_ESCASSEZ = (176, 164, 138)
+
+
+def _cor_interpolada(fracao: float, cor_a: tuple[int, int, int], cor_b: tuple[int, int, int]) -> str:
+    fracao = max(0.0, min(1.0, fracao))
+    r = round(cor_a[0] + (cor_b[0] - cor_a[0]) * fracao)
+    g = round(cor_a[1] + (cor_b[1] - cor_a[1]) * fracao)
+    b = round(cor_a[2] + (cor_b[2] - cor_a[2]) * fracao)
+    return f"rgb({r},{g},{b})"
+
+
+def _selo_impacto(rotulo: str, pct_bom: float, cor_ruim: tuple[int, int, int] = _COR_POLUIDA, pulsar_critico: bool = True) -> None:
+    """Desenha um selo colorido (cor da água + status) proporcional a `pct_bom` (0-100, quanto
+    maior, melhor para o rio) — atualiza instantaneamente a cada interação do usuário."""
+    cor_agua = _cor_interpolada(1 - pct_bom / 100, _COR_LIMPA, cor_ruim)
+    status = STATUS[status_para_iqa(pct_bom)]
+    classe_pulso = "selo-pulsar" if (pulsar_critico and pct_bom < 25) else ""
+    st.markdown(
+        f"""
+        <style>
+        @keyframes pulsarSelo {{ 0%,100% {{ opacity: 1; }} 50% {{ opacity: 0.45; }} }}
+        .selo-pulsar {{ animation: pulsarSelo 1.1s ease-in-out infinite; }}
+        </style>
+        <div style="display:flex;align-items:center;gap:9px;margin:4px 0 10px;">
+          <div class="{classe_pulso}" style="width:26px;height:26px;border-radius:7px;background:{cor_agua};
+                       border:1px solid rgba(0,0,0,0.15);flex-shrink:0;transition:background 0.3s ease;"></div>
+          <div style="font-size:12.5px;line-height:1.3;">
+            {status['icon']} <b>{rotulo}</b> tende a ficar <b style="color:{status['color']}">{status['label']}</b>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Cenário "não controlado" — patamar fixo, pessimista (continuidade das regras
@@ -60,10 +106,12 @@ with col_trecho:
 with col_horizonte:
     horizonte_anos = st.slider("Daqui a quantos anos?", 5, 30, 15, step=1)
 with col_clima:
-    clima_severidade = st.slider(
+    clima_pct = st.slider(
         "Mudança climática esperada", 60, 105, 90, format="%d%%",
         help="Quanto menor, mais seco/quente — aplicado igualmente aos dois cenários.",
-    ) / 100.0
+    )
+    clima_severidade = clima_pct / 100.0
+    _selo_impacto("Cenário climático", (clima_pct - 60) / 45 * 100, cor_ruim=_COR_SECA, pulsar_critico=False)
 
 st.divider()
 
@@ -84,6 +132,7 @@ with col_fis:
     )
     controlar_fisico = st.checkbox("Controlar sedimentos/erosão (Turbidez, Sólidos Totais)", value=True)
     esforco_fisico = st.slider("Esforço", 0, 100, 60, format="%d%%", key="esforco_fisico", disabled=not controlar_fisico)
+    _selo_impacto("Turbidez/Sólidos", esforco_fisico if controlar_fisico else 0)
     st.caption("Temperatura reflete só o cenário climático — não é controlável por gestão local.")
 
 with col_quim:
@@ -98,8 +147,10 @@ with col_quim:
     )
     controlar_organico = st.checkbox("Controlar esgoto/efluentes (OD, DBO, pH, parte dos Metais)", value=True)
     esforco_organico = st.slider("Esforço", 0, 100, 60, format="%d%%", key="esforco_organico", disabled=not controlar_organico)
+    _selo_impacto("Esgoto/OD/DBO", esforco_organico if controlar_organico else 0)
     controlar_nutrientes = st.checkbox("Controlar fertilizantes/agrotóxicos (Nutrientes, parte dos Metais)", value=True)
     esforco_nutrientes = st.slider("Esforço", 0, 100, 60, format="%d%%", key="esforco_nutrientes", disabled=not controlar_nutrientes)
+    _selo_impacto("Nutrientes/Eutrofização", esforco_nutrientes if controlar_nutrientes else 0)
 
 with col_bio:
     st.markdown("**Fatores Biológicos**")
@@ -113,6 +164,7 @@ with col_bio:
         "💧 Vazão ecológica mínima reservada", 0.30, 0.95, 0.60, step=0.05, format="%.2f",
         help="Fração da vazão simulada reservada para diluição — quanto maior, menos captação é permitida em seca.",
     )
+    _selo_impacto("Diluição/vazão", (outorga_piso - 0.30) / 0.65 * 100, cor_ruim=_COR_ESCASSEZ)
 
 esforco_sedimentar = esforco_fisico if controlar_fisico else 0
 esforco_esgoto = esforco_organico if controlar_organico else 0
@@ -157,6 +209,18 @@ serie_c = _serie_anual(hist_controlado, trecho_id)
 
 html = renderizar_html(serie_c, serie_nc, ano_min=1, ano_max=horizonte_anos, altura_px=620)
 components.html(html, height=640, scrolling=False)
+
+config_relatorio = dict(
+    esforco_sedimentar=esforco_sedimentar, esforco_esgoto=esforco_esgoto, esforco_agricola=esforco_agricola,
+    outorga_piso=outorga_piso, clima_pct=clima_pct,
+)
+pdf_bytes = gerar_relatorio_cenario_pdf(theme.TRECHO_LABEL[trecho_id], horizonte_anos, config_relatorio, serie_c, serie_nc)
+st.download_button(
+    "📄 Baixar relatório em PDF desta combinação",
+    data=pdf_bytes,
+    file_name=f"cenario_{trecho_id}_{horizonte_anos}anos.pdf",
+    mime="application/pdf",
+)
 
 with st.expander("Como isso é calculado"):
     st.markdown(
