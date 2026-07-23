@@ -6,11 +6,14 @@ divergente para deltas de cenário e status fixo para alertas).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import plotly.graph_objects as go
 import streamlit as st
 
 from waterweave.config import TRECHOS
 from waterweave.thresholds import STATUS, status_para_iqa, status_para_od  # noqa: F401 (re-exported for webapp callers)
+from waterweave.webapp import i18n
 
 # Categórica: ordem fixa, nunca ciclar. Usada por trecho (Alto/Médio/Baixo)
 # e, quando preciso, por parâmetro dentro de um mesmo trecho.
@@ -32,7 +35,32 @@ TRECHO_COLOR = {
     "baixo_tiete": CATEGORICAL["orange"],
 }
 
-TRECHO_LABEL = {trecho_id: trecho.nome for trecho_id, trecho in TRECHOS.items()}
+_TRECHO_CHAVE_I18N = {"alto_tiete": "trecho.alto", "medio_tiete": "trecho.medio", "baixo_tiete": "trecho.baixo"}
+
+
+class _TrechoLabelMapping(Mapping):
+    """Mapping trecho_id -> nome traduzido no idioma corrente da sessão. Implementa
+    `Mapping` (não um `dict` estático) para que `theme.TRECHO_LABEL[t]`, `.map(theme.TRECHO_LABEL)`
+    e `list(theme.TRECHO_LABEL)` continuem funcionando em todos os call sites existentes,
+    mas resolvendo a tradução em tempo real a cada chamada."""
+
+    def __getitem__(self, trecho_id: str) -> str:
+        chave = _TRECHO_CHAVE_I18N.get(trecho_id)
+        return i18n.t(chave) if chave else trecho_id
+
+    def __iter__(self):
+        return iter(TRECHOS)
+
+    def __len__(self) -> int:
+        return len(TRECHOS)
+
+
+TRECHO_LABEL = _TrechoLabelMapping()
+
+
+def status_label(status_key: str) -> str:
+    """Rótulo traduzido do status fixo (Bom/Atenção/Sério/Crítico) no idioma corrente."""
+    return i18n.t(f"status.{ {'good': 'bom', 'warning': 'atencao', 'serious': 'serio', 'critical': 'critico'}[status_key] }")
 
 # Um cenário -> uma cor, sempre a mesma em todas as páginas (distinta das cores de trecho).
 SCENARIO_COLOR = {

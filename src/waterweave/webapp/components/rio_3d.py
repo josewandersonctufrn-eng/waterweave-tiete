@@ -69,20 +69,27 @@ _TEMPLATE = r"""
     position: absolute; left: 16px; bottom: 54px; color: #f2f1ee; z-index: 10; font-size: 10.5px;
     text-shadow: 0 1px 3px rgba(0,0,0,0.7); opacity: 0.85; pointer-events: none; line-height: 1.5;
   }
+  #dicaCamera {
+    position: absolute; right: 16px; bottom: 54px; color: #f2f1ee; z-index: 10; font-size: 10.5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.7); opacity: 0; pointer-events: none; text-align: right;
+    transition: opacity 0.6s ease;
+  }
+  #cena { touch-action: none; }
 </style>
 </head>
 <body>
 <div id="cenaWrap">
-  <div id="carregando">Carregando cena…</div>
-  <div id="painel"><div class="ano">Ano 0</div><div class="fase">—</div></div>
+  <div id="carregando">__CARREGANDO__</div>
+  <div id="painel"><div class="ano">__ANO_LABEL__ 0</div><div class="fase">—</div></div>
   <div id="metricas"></div>
-  <div id="legenda">🏭 Indústria &nbsp; 🏘️ Residências &nbsp; 🌾 Plantação &nbsp; 🌧️ Chuva</div>
+  <div id="legenda">__LEGENDA__</div>
+  <div id="dicaCamera">__DICA_CAMERA__</div>
   <canvas id="cena"></canvas>
   <div id="controles">
-    <button id="btnPlay" title="Reproduzir/Pausar">▶</button>
+    <button id="btnPlay" title="__BOTAO_REPRODUZIR__">▶</button>
     <input id="slider" type="range" min="__ANO_MIN__" max="__ANO_MAX__" value="__ANO_MIN__" step="1">
     <div id="toggleWrap">
-      <label><input type="checkbox" id="chkNaoControlado"> ver sem controle</label>
+      <label><input type="checkbox" id="chkNaoControlado"> __VER_SEM_CONTROLE__</label>
     </div>
   </div>
 </div>
@@ -90,6 +97,7 @@ _TEMPLATE = r"""
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script>
 const DADOS = __DADOS_JSON__;
+const TEXTOS = __TEXTOS_JSON__;
 const ANO_MIN = __ANO_MIN__;
 const ANO_MAX = __ANO_MAX__;
 
@@ -100,10 +108,10 @@ function buscarLinha(serie, ano) {
 }
 
 function fase(iqaAtual, iqaAnterior) {
-  if (iqaAtual >= 70) return (iqaAnterior === null || iqaAnterior >= 65) ? "Água limpa" : "Recuperação concluída";
-  if (iqaAnterior !== null && iqaAtual - iqaAnterior > 1.5) return "Tratamento em ação — recuperando";
-  if (iqaAnterior !== null && iqaAtual - iqaAnterior < -1.5) return "Poluição avançando";
-  return "Estado crítico estável";
+  if (iqaAtual >= 70) return (iqaAnterior === null || iqaAnterior >= 65) ? TEXTOS.fase_agua_limpa : TEXTOS.fase_recuperacao;
+  if (iqaAnterior !== null && iqaAtual - iqaAnterior > 1.5) return TEXTOS.fase_tratamento;
+  if (iqaAnterior !== null && iqaAtual - iqaAnterior < -1.5) return TEXTOS.fase_poluicao;
+  return TEXTOS.fase_critico;
 }
 
 // Faixas reais (ambas as séries) para normalizar vazão e chuva de forma consistente --------
@@ -407,6 +415,43 @@ camera.position.set(0, 13.5, 27);
 camera.lookAt(0, 0, 0);
 
 // ---------------------------------------------------------------------------
+// Câmera interativa: arrastar (girar) e roda do mouse (zoom); em repouso, retoma
+// a órbita cinematográfica suave automaticamente após alguns segundos.
+// ---------------------------------------------------------------------------
+let anguloCam = 0;
+let alturaCam = 12.5;
+let raioBase = 27.0;
+let arrastando = false;
+let pointerAnterior = null;
+let ultimaInteracao = -999;
+const RAIO_MIN = 15, RAIO_MAX = 42;
+const ALTURA_MIN = 6, ALTURA_MAX = 20;
+
+canvas.style.cursor = 'grab';
+canvas.addEventListener('pointerdown', (e) => {
+  arrastando = true;
+  pointerAnterior = { x: e.clientX, y: e.clientY };
+  canvas.style.cursor = 'grabbing';
+  canvas.setPointerCapture(e.pointerId);
+});
+window.addEventListener('pointerup', () => { arrastando = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('pointercancel', () => { arrastando = false; canvas.style.cursor = 'grab'; });
+canvas.addEventListener('pointermove', (e) => {
+  if (!arrastando || !pointerAnterior) return;
+  const dx = e.clientX - pointerAnterior.x;
+  const dy = e.clientY - pointerAnterior.y;
+  pointerAnterior = { x: e.clientX, y: e.clientY };
+  anguloCam += dx * 0.006;
+  alturaCam = Math.max(ALTURA_MIN, Math.min(ALTURA_MAX, alturaCam - dy * 0.05));
+  ultimaInteracao = t;
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  raioBase = Math.max(RAIO_MIN, Math.min(RAIO_MAX, raioBase + e.deltaY * 0.02));
+  ultimaInteracao = t;
+}, { passive: false });
+
+// ---------------------------------------------------------------------------
 // Estado / animação
 // ---------------------------------------------------------------------------
 let anoAtual = ANO_MIN;
@@ -500,17 +545,17 @@ function atualizarParaAno(ano) {
     p.userData.profAlvo = odCritico ? -0.02 : (-0.4 - (1 - bioticoNorm) * 1.6);
   });
 
-  document.querySelector('#painel .ano').textContent = "Ano " + ano;
+  document.querySelector('#painel .ano').textContent = TEXTOS.ano + " " + ano;
   document.querySelector('#painel .fase').textContent = fase(linha.iqa, linhaAnterior ? linhaAnterior.iqa : null)
-    + (usarNaoControlado ? "  ·  cenário não controlado" : "  ·  cenário controlado");
+    + (usarNaoControlado ? ("  ·  " + TEXTOS.cenario_nao_controlado) : ("  ·  " + TEXTOS.cenario_controlado));
   document.getElementById('metricas').innerHTML = [
-    metricaLinha("IQA", linha.iqa.toFixed(0)),
-    metricaLinha("OD", linha.od_mg_l.toFixed(2), "mg/L"),
-    metricaLinha("DBO", linha.dbo_mg_l.toFixed(1), "mg/L"),
-    metricaLinha("Turbidez", linha.turbidez_ntu.toFixed(0), "NTU"),
-    metricaLinha("Vazão", linha.vazao_m3s_medio.toFixed(1), "m³/s"),
-    metricaLinha("E. coli", Math.round(linha.e_coli_nmp_100ml).toLocaleString('pt-BR'), "NMP/100mL"),
-    metricaLinha("Índice biótico", linha.indice_biotico.toFixed(0)),
+    metricaLinha(TEXTOS.metrica_iqa, linha.iqa.toFixed(0)),
+    metricaLinha(TEXTOS.metrica_od, linha.od_mg_l.toFixed(2), "mg/L"),
+    metricaLinha(TEXTOS.metrica_dbo, linha.dbo_mg_l.toFixed(1), "mg/L"),
+    metricaLinha(TEXTOS.metrica_turbidez, linha.turbidez_ntu.toFixed(0), "NTU"),
+    metricaLinha(TEXTOS.metrica_vazao, linha.vazao_m3s_medio.toFixed(1), "m³/s"),
+    metricaLinha(TEXTOS.metrica_ecoli, Math.round(linha.e_coli_nmp_100ml).toLocaleString('pt-BR'), "NMP/100mL"),
+    metricaLinha(TEXTOS.metrica_biotico, linha.indice_biotico.toFixed(0)),
   ].join("<br>");
 
   document.getElementById('slider').value = ano;
@@ -526,6 +571,7 @@ let intervaloPlay = null;
 document.getElementById('btnPlay').addEventListener('click', (e) => {
   tocando = !tocando;
   e.target.textContent = tocando ? "⏸" : "▶";
+  e.target.title = tocando ? TEXTOS.botao_pausar : TEXTOS.botao_reproduzir;
   if (tocando) {
     intervaloPlay = setInterval(() => {
       anoAtual = anoAtual >= ANO_MAX ? ANO_MIN : anoAtual + 1;
@@ -563,11 +609,16 @@ function loop() {
   t += 0.016;
   aguaUniforms.uTime.value = t;
 
-  // câmera: órbita suave contínua ("plano fluido")
-  const raioCam = 27.0 + Math.sin(t * 0.05) * 1.5;
-  camera.position.x = Math.sin(t * 0.045) * raioCam * 0.5;
-  camera.position.z = Math.cos(t * 0.045) * raioCam * 0.5 + 7;
-  camera.position.y = 12.5 + Math.sin(t * 0.04) * 1.0;
+  // câmera: usuário arrasta para girar e usa a roda para zoom; em repouso (>2s sem
+  // interação), a órbita cinematográfica automática retoma suavemente (sem saltos,
+  // pois o ângulo/altura são acumulados a partir do estado atual, nunca recalculados do zero)
+  const inativoPor = t - ultimaInteracao;
+  const pesoAutoOrbita = arrastando ? 0 : Math.max(0, Math.min(1, (inativoPor - 2) / 3));
+  anguloCam += 0.045 * 0.016 * pesoAutoOrbita;
+  const raioCam = raioBase + Math.sin(t * 0.05) * 1.5 * pesoAutoOrbita;
+  camera.position.x = Math.sin(anguloCam) * raioCam * 0.5;
+  camera.position.z = Math.cos(anguloCam) * raioCam * 0.5 + 7;
+  camera.position.y = alturaCam + Math.sin(t * 0.04) * 1.0 * pesoAutoOrbita;
   camera.lookAt(0, -0.3, 0);
 
   // nível/largura da água transicionam suavemente (evita salto brusco ao trocar de ano)
@@ -651,6 +702,7 @@ function loop() {
 aoRedimensionar();
 atualizarParaAno(ANO_MIN);
 document.getElementById('carregando').style.display = 'none';
+document.getElementById('dicaCamera').style.opacity = '0.85';
 loop();
 </script>
 </body>
@@ -658,13 +710,56 @@ loop();
 """
 
 
-def renderizar_html(dados_controlado: list[dict], dados_nao_controlado: list[dict], ano_min: int, ano_max: int, altura_px: int = 620) -> str:
+_TEXTOS_PADRAO = {
+    "carregando": "Carregando cena…",
+    "legenda": "🏭 Indústria &nbsp; 🏘️ Residências &nbsp; 🌾 Plantação &nbsp; 🌧️ Chuva",
+    "ver_sem_controle": "ver sem controle",
+    "ano": "Ano",
+    "cenario_controlado": "cenário controlado",
+    "cenario_nao_controlado": "cenário não controlado",
+    "fase_agua_limpa": "Água limpa",
+    "fase_recuperacao": "Recuperação concluída",
+    "fase_tratamento": "Tratamento em ação — recuperando",
+    "fase_poluicao": "Poluição avançando",
+    "fase_critico": "Estado crítico estável",
+    "metrica_iqa": "IQA",
+    "metrica_od": "OD",
+    "metrica_dbo": "DBO",
+    "metrica_turbidez": "Turbidez",
+    "metrica_vazao": "Vazão",
+    "metrica_ecoli": "E. coli",
+    "metrica_biotico": "Índice biótico",
+    "botao_reproduzir": "Reproduzir/Pausar",
+    "botao_pausar": "Reproduzir/Pausar",
+    "dica_camera": "🖱️ arraste para girar · roda para aproximar",
+}
+
+
+def renderizar_html(
+    dados_controlado: list[dict],
+    dados_nao_controlado: list[dict],
+    ano_min: int,
+    ano_max: int,
+    altura_px: int = 620,
+    textos: dict | None = None,
+) -> str:
     """Monta o HTML final do componente, injetando as trajetórias reais simuladas (controlado e
-    não controlado) — o JS só lê esses dados, nunca gera valores por conta própria."""
+    não controlado) — o JS só lê esses dados, nunca gera valores por conta própria.
+
+    `textos` traduz os rótulos exibidos na cena (idiomas suportados por `webapp.i18n`);
+    quando omitido, usa os textos em português como padrão."""
+    textos_finais = {**_TEXTOS_PADRAO, **(textos or {})}
     payload = {"controlado": dados_controlado, "nao_controlado": dados_nao_controlado}
     html = _TEMPLATE
     html = html.replace("__DADOS_JSON__", json.dumps(payload, ensure_ascii=False))
+    html = html.replace("__TEXTOS_JSON__", json.dumps(textos_finais, ensure_ascii=False))
     html = html.replace("__ANO_MIN__", str(ano_min))
     html = html.replace("__ANO_MAX__", str(ano_max))
     html = html.replace("__ALTURA__", str(altura_px))
+    html = html.replace("__CARREGANDO__", textos_finais["carregando"])
+    html = html.replace("__ANO_LABEL__", textos_finais["ano"])
+    html = html.replace("__LEGENDA__", textos_finais["legenda"])
+    html = html.replace("__BOTAO_REPRODUZIR__", textos_finais["botao_reproduzir"])
+    html = html.replace("__VER_SEM_CONTROLE__", textos_finais["ver_sem_controle"])
+    html = html.replace("__DICA_CAMERA__", textos_finais["dica_camera"])
     return html

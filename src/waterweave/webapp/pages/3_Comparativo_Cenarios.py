@@ -21,19 +21,32 @@ import streamlit as st
 
 from waterweave.config import TRECHOS
 from waterweave.models.abm.scenarios import CENARIOS, HORIZONTE_MESES, rodar_cenario
-from waterweave.webapp import theme
+from waterweave.webapp import i18n, theme
 
 st.set_page_config(page_title="Comparativo de Cenários — WaterWeave-Tietê", page_icon="⚖️", layout="wide")
 theme.inject_style()
 theme.render_sidebar_brand()
+i18n.seletor_idioma()
 
-st.title("Comparativo de Cenários")
-st.caption(
-    "Simulação real via ABM (Mesa) + balanço hídrico biofísico + Streeter-Phelps — "
-    "não são multiplicadores ilustrativos. Ver `models.hybrid_bridge` para as simplificações assumidas."
-)
+st.title(i18n.t("comp.titulo"))
+st.caption(i18n.t("comp.caption"))
 
-HORIZONTE_LABEL = {"curto_prazo": "Curto prazo (5 anos)", "medio_prazo": "Médio prazo (15 anos)", "longo_prazo": "Longo prazo (30 anos)"}
+HORIZONTE_LABEL = {"curto_prazo": i18n.t("comp.curto_prazo"), "medio_prazo": i18n.t("comp.medio_prazo"), "longo_prazo": i18n.t("comp.longo_prazo")}
+CENARIO_I18N = {
+    "atual": ("comp.cenario_atual", "comp.cenario_atual.desc"),
+    "alta_restricao_outorga": ("comp.cenario_outorga", "comp.cenario_outorga.desc"),
+    "mudanca_climatica_extrema": ("comp.cenario_clima", "comp.cenario_clima.desc"),
+}
+
+
+def _nome_cenario(cenario_id: str) -> str:
+    chave = CENARIO_I18N.get(cenario_id)
+    return i18n.t(chave[0]) if chave else CENARIOS[cenario_id].nome
+
+
+def _desc_cenario(cenario_id: str) -> str:
+    chave = CENARIO_I18N.get(cenario_id)
+    return i18n.t(chave[1]) if chave else CENARIOS[cenario_id].descricao
 
 
 @st.cache_data(ttl=3600, show_spinner="Rodando simulação do ABM...")
@@ -44,12 +57,12 @@ def _rodar_todos_cenarios(horizonte_meses: int) -> pd.DataFrame:
 
 
 horizonte_key = st.radio(
-    "Horizonte temporal", options=list(HORIZONTE_LABEL), format_func=lambda h: HORIZONTE_LABEL[h], horizontal=True
+    i18n.t("comp.horizonte"), options=list(HORIZONTE_LABEL), format_func=lambda h: HORIZONTE_LABEL[h], horizontal=True
 )
 resultado = _rodar_todos_cenarios(HORIZONTE_MESES[horizonte_key])
 
-PARAMETROS = {"iqa": "IQA simulado (proxy 0-100)", "od_mg_l": "Oxigênio Dissolvido simulado (mg/L)", "dbo_mg_l": "DBO simulada (mg/L)", "vazao_m3s_medio": "Vazão simulada (m³/s)"}
-parametro_key = st.selectbox("Parâmetro", options=list(PARAMETROS), format_func=lambda k: PARAMETROS[k])
+PARAMETROS = {"iqa": i18n.t("comp.iqa"), "od_mg_l": i18n.t("comp.od"), "dbo_mg_l": i18n.t("comp.dbo"), "vazao_m3s_medio": i18n.t("comp.vazao")}
+parametro_key = st.selectbox(i18n.t("comp.parametro"), options=list(PARAMETROS), format_func=lambda k: PARAMETROS[k])
 
 fig = go.Figure()
 for cenario_id in CENARIOS:
@@ -58,7 +71,7 @@ for cenario_id in CENARIOS:
         go.Bar(
             x=[theme.TRECHO_LABEL[t] for t in serie["trecho_id"]],
             y=serie[parametro_key],
-            name=CENARIOS[cenario_id].nome,
+            name=_nome_cenario(cenario_id),
             marker_color=theme.SCENARIO_COLOR[cenario_id],
         )
     )
@@ -68,20 +81,20 @@ with st.container(border=True):
     st.plotly_chart(fig, use_container_width=True)
 
 data_final = resultado["mes_data"].iloc[0].strftime("%m/%Y")
-st.subheader(f"Tabela comparativa — estado simulado ao fim do horizonte ({data_final})")
+st.subheader(i18n.t("comp.tabela_titulo", data=data_final))
 tabela = resultado.copy()
 tabela["trecho"] = tabela["trecho_id"].map(theme.TRECHO_LABEL)
-tabela["cenario"] = tabela["cenario_id"].map(lambda c: CENARIOS[c].nome)
+tabela["cenario"] = tabela["cenario_id"].map(_nome_cenario)
 tabela_wide = tabela.pivot(index="trecho", columns="cenario", values=parametro_key)
-tabela_wide = tabela_wide[[CENARIOS[c].nome for c in CENARIOS]]
+tabela_wide = tabela_wide[[_nome_cenario(c) for c in CENARIOS]]
 st.dataframe(tabela_wide.style.format("{:.2f}"), use_container_width=True)
 
-with st.expander("Multas aplicadas e estresse hídrico durante a simulação"):
+with st.expander(i18n.t("comp.expander_multas")):
     extras = resultado[["trecho_id", "cenario_id", "multas_acumuladas", "estresse_hidrico"]].copy()
     extras["trecho"] = extras["trecho_id"].map(theme.TRECHO_LABEL)
-    extras["cenario"] = extras["cenario_id"].map(lambda c: CENARIOS[c].nome)
+    extras["cenario"] = extras["cenario_id"].map(_nome_cenario)
     st.dataframe(extras[["trecho", "cenario", "multas_acumuladas", "estresse_hidrico"]], use_container_width=True, hide_index=True)
 
-with st.expander("O que cada cenário configura"):
-    for cenario in CENARIOS.values():
-        st.markdown(f"**{cenario.nome}** — {cenario.descricao}")
+with st.expander(i18n.t("comp.expander_cenarios")):
+    for cenario_id in CENARIOS:
+        st.markdown(f"**{_nome_cenario(cenario_id)}** — {_desc_cenario(cenario_id)}")

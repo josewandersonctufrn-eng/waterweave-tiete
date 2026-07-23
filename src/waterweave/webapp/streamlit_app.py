@@ -21,42 +21,36 @@ if str(_SRC_DIR) not in sys.path:
 import streamlit as st
 
 from waterweave.config import TRECHOS
-from waterweave.webapp import theme
+from waterweave.webapp import i18n, theme
 from waterweave.webapp.data_loader import load_estacoes_tiete, load_qualidade_historica
 
 st.set_page_config(page_title="WaterWeave-Tietê", page_icon="💧", layout="wide")
 theme.inject_style()
 theme.render_sidebar_brand()
+i18n.seletor_idioma()
 
 with st.sidebar:
-    st.markdown("#### Menu de Navegação")
+    st.markdown(f"#### {i18n.t('nav.titulo')}")
     st.markdown(
-        """
-        - **Mapa Interativo** — estações de monitoramento georreferenciadas, nascente → foz.
-        - **Séries Históricas** — vazão, chuva e qualidade da água, 1940-2025.
-        - **Comparativo de Cenários** — Atual vs. Alta Restrição de Outorga vs. Mudança Climática Extrema.
-        - **Cenários Futuros** — simule 5 a 30 anos à frente ajustando saneamento, fiscalização, agrotóxicos e outorga; veja o rio em 3D.
-        - **Relatório Automático** — análise textual sintética por trecho e ano.
+        f"""
+        - **{i18n.t('nav.mapa')}** — {i18n.t('nav.mapa.desc')}
+        - **{i18n.t('nav.series')}** — {i18n.t('nav.series.desc')}
+        - **{i18n.t('nav.comparativo')}** — {i18n.t('nav.comparativo.desc')}
+        - **{i18n.t('nav.cenarios_futuros')}** — {i18n.t('nav.cenarios_futuros.desc')}
+        - **{i18n.t('nav.relatorio')}** — {i18n.t('nav.relatorio.desc')}
         """
     )
 
-st.title("WaterWeave-Tietê")
-st.caption(
-    "Gestão sustentável de recursos hídricos do Rio Tietê — Salesópolis (nascente) "
-    "até Itapura (foz no Rio Paraná). Histórico 1940-2025 com automação mensal."
-)
+st.title(i18n.t("home.titulo"))
+st.caption(i18n.t("home.caption"))
 
 qualidade = load_qualidade_historica()
 estacoes = load_estacoes_tiete()
 ultimo_ano = int(qualidade["ano"].max())
 qualidade_recente = qualidade[qualidade["ano"] == ultimo_ano]
 
-st.subheader(f"Panorama por trecho — {ultimo_ano}")
-st.caption(
-    "⚠️ Os indicadores de qualidade da água abaixo vêm de uma série **simulada** "
-    "(proxy histórico baseado em tendências CETESB/DAEE), não de telemetria direta — "
-    "ver `ingestion.bronze_qualidade_solo`."
-)
+st.subheader(i18n.t("home.panorama", ano=ultimo_ano))
+st.caption(i18n.t("home.aviso_simulado"))
 
 colunas = st.columns(len(TRECHOS))
 for coluna, trecho_id in zip(colunas, TRECHOS):
@@ -65,13 +59,13 @@ for coluna, trecho_id in zip(colunas, TRECHOS):
     with coluna, st.container(border=True):
         st.markdown(f"**{theme.TRECHO_LABEL[trecho_id]}**")
         if linha.empty:
-            st.info("Sem dado para o ano mais recente.")
+            st.info(i18n.t("home.sem_dado"))
             continue
         iqa = float(linha["iqa"].iloc[0])
         od = float(linha["od_mg_l"].iloc[0])
         dbo = float(linha["dbo_mg_l"].iloc[0])
         status = theme.STATUS[theme.status_para_iqa(iqa)]
-        st.metric("IQA médio", f"{iqa:.1f}", help="Índice de Qualidade da Água (0-100)")
-        st.metric("OD (mg/L)", f"{od:.2f}")
-        st.metric("DBO (mg/L)", f"{dbo:.2f}")
-        st.markdown(f"{status['icon']} **{status['label']}** · {n_estacoes} estações monitoradas")
+        st.metric(i18n.t("home.iqa_medio"), f"{iqa:.1f}", help="Índice de Qualidade da Água (0-100)")
+        st.metric(i18n.t("series.od"), f"{od:.2f}")
+        st.metric(i18n.t("series.dbo"), f"{dbo:.2f}")
+        st.markdown(f"{status['icon']} **{theme.status_label(theme.status_para_iqa(iqa))}** · {i18n.t('home.estacoes_monitoradas', n=n_estacoes)}")
