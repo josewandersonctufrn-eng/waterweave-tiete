@@ -50,10 +50,10 @@ _T: dict[str, dict[str, str]] = {
     },
     "home.panorama": {"pt": "Panorama por trecho — {ano}", "en": "Overview by stretch — {ano}", "fr": "Aperçu par tronçon — {ano}", "es": "Panorama por tramo — {ano}"},
     "home.aviso_simulado": {
-        "pt": "⚠️ Os indicadores de qualidade da água abaixo vêm de uma série **simulada** (proxy histórico baseado em tendências CETESB/DAEE), não de telemetria direta — ver `ingestion.bronze_qualidade_solo`.",
-        "en": "⚠️ The water quality indicators below come from a **simulated** series (historical proxy based on CETESB/DAEE trends), not direct telemetry — see `ingestion.bronze_qualidade_solo`.",
-        "fr": "⚠️ Les indicateurs de qualité de l'eau ci-dessous proviennent d'une série **simulée** (proxy historique basé sur les tendances CETESB/DAEE), pas de télémétrie directe — voir `ingestion.bronze_qualidade_solo`.",
-        "es": "⚠️ Los indicadores de calidad del agua a continuación provienen de una serie **simulada** (proxy histórico basado en tendencias CETESB/DAEE), no de telemetría directa — ver `ingestion.bronze_qualidade_solo`.",
+        "pt": "⚠️ Os indicadores de qualidade da água abaixo combinam medições **reais** da rede CETESB (1978–2024, quando disponíveis) com uma série **simulada** de preenchimento nos anos sem essa cobertura (1940–1977 e lacunas pontuais) — a coluna `fonte_tipo` identifica a origem de cada ano, ver `ingestion.bronze_cetesb`.",
+        "en": "⚠️ The water quality indicators below combine **real** CETESB network measurements (1978–2024, where available) with a **simulated** fill-in series for years without that coverage (1940–1977 and occasional gaps) — the `fonte_tipo` column identifies each year's origin, see `ingestion.bronze_cetesb`.",
+        "fr": "⚠️ Les indicateurs de qualité de l'eau ci-dessous combinent des mesures **réelles** du réseau CETESB (1978–2024, lorsque disponibles) avec une série **simulée** de remplissage pour les années sans cette couverture (1940–1977 et lacunes ponctuelles) — la colonne `fonte_tipo` identifie l'origine de chaque année, voir `ingestion.bronze_cetesb`.",
+        "es": "⚠️ Los indicadores de calidad del agua a continuación combinan mediciones **reales** de la red CETESB (1978–2024, cuando están disponibles) con una serie **simulada** de relleno para los años sin esa cobertura (1940–1977 y brechas puntuales) — la columna `fonte_tipo` identifica el origen de cada año, ver `ingestion.bronze_cetesb`.",
     },
     "home.sem_dado": {"pt": "Sem dado para o ano mais recente.", "en": "No data for the most recent year.", "fr": "Aucune donnée pour l'année la plus récente.", "es": "Sin datos para el año más reciente."},
     "home.iqa_medio": {"pt": "IQA médio", "en": "Average WQI", "fr": "IQE moyen", "es": "ICA medio"},
@@ -79,10 +79,10 @@ _T: dict[str, dict[str, str]] = {
     "series.caption": {"pt": "1940–2025 · qualidade da água, vazão e chuva", "en": "1940–2025 · water quality, flow and rainfall", "fr": "1940–2025 · qualité de l'eau, débit et pluie", "es": "1940–2025 · calidad del agua, caudal y lluvia"},
     "series.qualidade_subheader": {"pt": "Qualidade da água por trecho", "en": "Water quality by stretch", "fr": "Qualité de l'eau par tronçon", "es": "Calidad del agua por tramo"},
     "series.aviso_simulado": {
-        "pt": "⚠️ Série simulada (proxy histórico) — ver aviso de proveniência em `ingestion.bronze_qualidade_solo`.",
-        "en": "⚠️ Simulated series (historical proxy) — see provenance notice in `ingestion.bronze_qualidade_solo`.",
-        "fr": "⚠️ Série simulée (proxy historique) — voir l'avis de provenance dans `ingestion.bronze_qualidade_solo`.",
-        "es": "⚠️ Serie simulada (proxy histórico) — ver aviso de procedencia en `ingestion.bronze_qualidade_solo`.",
+        "pt": "⚠️ Dado misto: medições **reais** da CETESB (1978–2024, quando disponíveis) + série **simulada** de preenchimento nos anos sem cobertura real — veja a coluna `fonte_tipo` na tabela abaixo.",
+        "en": "⚠️ Mixed-provenance data: **real** CETESB measurements (1978–2024, where available) + **simulated** fill-in series for years without real coverage — see the `fonte_tipo` column in the table below.",
+        "fr": "⚠️ Données mixtes : mesures **réelles** de la CETESB (1978–2024, lorsque disponibles) + série **simulée** de remplissage pour les années sans couverture réelle — voir la colonne `fonte_tipo` dans le tableau ci-dessous.",
+        "es": "⚠️ Datos mixtos: mediciones **reales** de la CETESB (1978–2024, cuando están disponibles) + serie **simulada** de relleno para los años sin cobertura real — ver la columna `fonte_tipo` en la tabla de abajo.",
     },
     "series.parametro": {"pt": "Parâmetro", "en": "Parameter", "fr": "Paramètre", "es": "Parámetro"},
     "series.iqa_medio": {"pt": "IQA Médio (0-100)", "en": "Average WQI (0-100)", "fr": "IQE Moyen (0-100)", "es": "ICA Medio (0-100)"},
@@ -92,6 +92,12 @@ _T: dict[str, dict[str, str]] = {
     "series.pesticidas": {"pt": "Pesticidas (ppm)", "en": "Pesticides (ppm)", "fr": "Pesticides (ppm)", "es": "Pesticidas (ppm)"},
     "series.materia_organica": {"pt": "Matéria Orgânica (%)", "en": "Organic Matter (%)", "fr": "Matière Organique (%)", "es": "Materia Orgánica (%)"},
     "series.ver_tabela": {"pt": "Ver tabela", "en": "View table", "fr": "Voir le tableau", "es": "Ver tabla"},
+    "series.fonte_por_ano": {
+        "pt": "Proveniência por ano/trecho (`observado` = medição real CETESB, `simulado` = preenchimento):",
+        "en": "Provenance by year/stretch (`observado` = real CETESB measurement, `simulado` = fill-in):",
+        "fr": "Provenance par année/tronçon (`observado` = mesure réelle CETESB, `simulado` = remplissage) :",
+        "es": "Procedencia por año/tramo (`observado` = medición real CETESB, `simulado` = relleno):",
+    },
     "series.vazao_chuva_subheader": {"pt": "Vazão e chuva observadas (rede completa de postos DAEE)", "en": "Observed flow and rainfall (full DAEE station network)", "fr": "Débit et pluie observés (réseau complet de stations DAEE)", "es": "Caudal y lluvia observados (red completa de estaciones DAEE)"},
     "series.aviso_real": {
         "pt": "Dado real (não simulado), regularizado para média mensal por posto pelo pipeline de Ingestão.",
@@ -181,10 +187,10 @@ _T: dict[str, dict[str, str]] = {
         "es": "⚠️ **Alerta:** OD por debajo de 4 mg/L indica estrés para la biota acuática — se recomienda priorizar la fiscalización de vertidos de efluentes en este tramo.",
     },
     "rel.nota_proveniencia": {
-        "pt": "_Nota de proveniência: indicadores desta seção vêm de uma série simulada (proxy histórico), não de telemetria direta — ver `ingestion.bronze_qualidade_solo`._",
-        "en": "_Provenance note: indicators in this section come from a simulated series (historical proxy), not direct telemetry — see `ingestion.bronze_qualidade_solo`._",
-        "fr": "_Note de provenance : les indicateurs de cette section proviennent d'une série simulée (proxy historique), pas de télémétrie directe — voir `ingestion.bronze_qualidade_solo`._",
-        "es": "_Nota de procedencia: los indicadores de esta sección provienen de una serie simulada (proxy histórico), no de telemetría directa — ver `ingestion.bronze_qualidade_solo`._",
+        "pt": "_Nota de proveniência: indicadores desta seção vêm de medições reais da rede CETESB (1978–2024, quando disponíveis para o trecho/ano); nos anos sem essa cobertura (1940–1977 e lacunas pontuais) usa-se uma série simulada (proxy histórico) como preenchimento — ver `transform.gold_features.qualidade_real_com_fallback_simulado`._",
+        "en": "_Provenance note: indicators in this section come from real CETESB network measurements (1978–2024, where available for the stretch/year); years without that coverage (1940–1977 and occasional gaps) fall back to a simulated series (historical proxy) as fill-in — see `transform.gold_features.qualidade_real_com_fallback_simulado`._",
+        "fr": "_Note de provenance : les indicateurs de cette section proviennent de mesures réelles du réseau CETESB (1978–2024, lorsque disponibles pour le tronçon/année) ; les années sans cette couverture (1940–1977 et lacunes ponctuelles) utilisent une série simulée (proxy historique) en remplissage — voir `transform.gold_features.qualidade_real_com_fallback_simulado`._",
+        "es": "_Nota de procedencia: los indicadores de esta sección provienen de mediciones reales de la red CETESB (1978–2024, cuando están disponibles para el tramo/año); los años sin esa cobertura (1940–1977 y brechas puntuales) usan una serie simulada (proxy histórico) como relleno — ver `transform.gold_features.qualidade_real_com_fallback_simulado`._",
     },
 
     # ---- Seletor de formato do relatório em PDF (Resumido/Completo) — ambas as telas -------

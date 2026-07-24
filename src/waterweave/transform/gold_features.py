@@ -15,17 +15,32 @@ from __future__ import annotations
 
 import pandas as pd
 
-from waterweave.config import GOLD_DIR, SILVER_DIR, TRECHOS
+from waterweave.config import FONTE_TIPO_OBSERVADO, FONTE_TIPO_SIMULADO, GOLD_DIR, SILVER_DIR, TRECHOS
 from waterweave.io_delta import read_table, write_table
 
 LAGS_MESES = (1, 3, 12)
+
+
+def qualidade_real_com_fallback_simulado() -> pd.DataFrame:
+    """Prioriza `silver.qualidade_cetesb` (real, CETESB 1978-2024) sobre `silver.qualidade`
+    (simulado) por (trecho_id, ano) — o simulado só preenche anos sem medição real
+    (majoritariamente 1940-1977, antes do início da série CETESB, e eventuais anos com
+    cobertura real insuficiente). Ver ACHADO DE AUDITORIA em `ingestion.monthly_job` —
+    antes desta função o dashboard/ABM/ML liam 100% do simulado."""
+    real = read_table(SILVER_DIR / "qualidade_cetesb")
+    simulado = read_table(SILVER_DIR / "qualidade")
+    combinado = pd.concat([real, simulado], ignore_index=True)
+    prioridade = combinado["fonte_tipo"].map({FONTE_TIPO_OBSERVADO: 0, FONTE_TIPO_SIMULADO: 1})
+    combinado = combinado.assign(_prioridade=prioridade).sort_values(["trecho_id", "ano", "_prioridade"])
+    combinado = combinado.drop_duplicates(subset=["trecho_id", "ano"], keep="first").drop(columns="_prioridade")
+    return combinado.reset_index(drop=True)
 
 
 def build_serie_temporal_trecho_mes() -> pd.DataFrame:
     """Junta vazão + chuva (agregadas por trecho/mês) com qualidade da água (anual, repetida por mês)."""
     vazao = read_table(SILVER_DIR / "vazao_mensal")
     chuva = read_table(SILVER_DIR / "chuva_mensal")
-    qualidade = read_table(SILVER_DIR / "qualidade")
+    qualidade = qualidade_real_com_fallback_simulado()
 
     vazao_trecho = vazao.groupby(["trecho_id", "ano", "mes"], as_index=False).agg(
         vazao_m3s_medio=("vazao_m3s", "mean"), n_postos_vazao=("codigo_posto", "nunique")

@@ -14,6 +14,7 @@ import streamlit as st
 
 from waterweave.config import GOLD_DIR, SILVER_DIR
 from waterweave.io_delta import read_table
+from waterweave.transform.gold_features import qualidade_real_com_fallback_simulado
 
 
 @st.cache_data(ttl=3600)
@@ -24,12 +25,13 @@ def load_estacoes_tiete() -> pd.DataFrame:
 
 @st.cache_data(ttl=3600)
 def load_qualidade_historica() -> pd.DataFrame:
-    """Série histórica de IQA/DBO/OD/metais/pesticidas por trecho (`silver.qualidade`).
-
-    ⚠️ Fonte simulada/consolidada a partir de tendências CETESB/DAEE — ver
-    aviso de proveniência em `ingestion.bronze_qualidade_solo`.
+    """Série histórica de IQA/DBO/OD/metais/pesticidas por trecho, priorizando medição
+    REAL da CETESB (`silver.qualidade_cetesb`, 1978-2024) e usando `silver.qualidade`
+    (simulado) só como preenchimento de anos sem cobertura real (1940-1977 e lacunas
+    pontuais) — ver `transform.gold_features.qualidade_real_com_fallback_simulado` e
+    a coluna `fonte_tipo` retornada aqui para a proveniência linha a linha.
     """
-    return read_table(SILVER_DIR / "qualidade")
+    return qualidade_real_com_fallback_simulado()
 
 
 @st.cache_data(ttl=3600)

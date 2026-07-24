@@ -2,20 +2,37 @@
 
 Ordem de execução:
   1. Bronze das fontes estáticas locais (arquivos DAEE + planilhas já em
-     disco) — hoje um rescan completo a cada rodada (arquivos são poucos o
-     bastante para isso ser barato); a Delta table é sobrescrita com
-     `schema_mode="overwrite"` (ver `io_delta.write_table`).
+     disco, incluindo `bronze_cetesb` — 2,4 milhões de medições reais da
+     rede estadual de qualidade da água, ver ACHADO DE AUDITORIA abaixo) —
+     hoje um rescan completo a cada rodada; a Delta table é sobrescrita com
+     `schema_mode="overwrite"` (ver `io_delta.write_table`). `bronze_cetesb`
+     é o maior volume dessa lista (~2,4M linhas) mas ainda cabe no rescan
+     completo em uma única máquina — reavaliar para incremental se isso
+     mudar.
   2. Conectores ao vivo. `ana_snirh` é real (API pública HidroWeb da ANA,
      sem chave) e seu resultado é anexado (`mode="append"`) direto nas
      tabelas Bronze de fluviometria/pluviometria, no mesmo schema
      "consolidado" que os arquivos DAEE já usam — ver
-     `connectors.ana_snirh`. `cetesb` e `mapbiomas` seguem como
-     `NotImplementedError` (a primeira não tem API pública documentada, a
-     segunda depende de autenticação Google Earth Engine do usuário — ver
-     docstrings de cada uma) e são puladas com aviso, sem derrubar o job.
+     `connectors.ana_snirh`. `cetesb` (aqui, o conector — não confundir com
+     `ingestion.bronze_cetesb`, que já cobre o histórico 1978-2024 via
+     export local) e `mapbiomas` seguem como `NotImplementedError` (a
+     primeira não tem API pública documentada para os boletins
+     PÓS-2024, a segunda depende de autenticação Google Earth Engine do
+     usuário — ver docstrings de cada uma) e são puladas com aviso, sem
+     derrubar o job.
   3. Silver e Gold são sempre recomputados por inteiro a partir da Bronze
      (custo baixo no volume atual de dados; trocar por reprocessamento
      incremental por trecho é uma otimização futura, não uma correção).
+
+ACHADO DE AUDITORIA (2026-07, ver
+docs/Auditoria_Engenharia_Dados_WaterWeave_Tiete.docx): `base_de_dados_pontos.xlsx`
+(a fonte que `bronze_cetesb` agora ingere) estava registrada em
+`config.RAW_SOURCES["pontos_consolidados"]` desde o início do projeto, mas
+não constava nesta lista de execução — 2,4 milhões de medições reais da
+CETESB ficaram tecnicamente "configuradas" e nunca lidas. Ver
+`tests/test_pipeline_paridade.py` para o teste de guarda que agora impede
+essa classe específica de regressão (uma fonte declarada em `RAW_SOURCES`
+sem ingestão Bronze correspondente).
 """
 from __future__ import annotations
 
@@ -26,6 +43,7 @@ from datetime import date, datetime
 from waterweave.config import BRONZE_DIR, PIPELINE_CONTROL_FILE
 from waterweave.io_delta import write_table
 from waterweave.ingestion import (
+    bronze_cetesb,
     bronze_daee_fluviometria,
     bronze_daee_pluviometria,
     bronze_estacoes,
@@ -33,7 +51,14 @@ from waterweave.ingestion import (
     bronze_sensoriamento,
 )
 from waterweave.ingestion.connectors import ana_snirh, cetesb, mapbiomas
-from waterweave.transform import gold_features, silver_estacoes, silver_hidrologia, silver_qualidade, silver_sensoriamento
+from waterweave.transform import (
+    gold_features,
+    silver_estacoes,
+    silver_hidrologia,
+    silver_qualidade,
+    silver_qualidade_cetesb,
+    silver_sensoriamento,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +92,7 @@ def run_bronze_static_sources() -> None:
     bronze_daee_fluviometria.run()
     bronze_daee_pluviometria.run()
     bronze_estacoes.run()
+    bronze_cetesb.run()
     bronze_qualidade_solo.run()
     bronze_sensoriamento.run()
 
@@ -96,6 +122,7 @@ def run_silver_gold_refresh() -> None:
     silver_estacoes.build_silver_estacoes()
     silver_hidrologia.build_silver_hidrologia()
     silver_qualidade.build_silver_qualidade()
+    silver_qualidade_cetesb.build_silver_qualidade_cetesb()
     silver_sensoriamento.build_silver_sensoriamento()
     gold_features.run()
 

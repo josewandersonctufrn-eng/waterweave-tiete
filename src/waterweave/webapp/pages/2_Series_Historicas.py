@@ -61,6 +61,11 @@ with st.expander(i18n.t("series.ver_tabela")):
     tabela_pivot.columns = [theme.TRECHO_LABEL[c] for c in tabela_pivot.columns]
     st.dataframe(tabela_pivot, use_container_width=True)
 
+    st.caption(i18n.t("series.fonte_por_ano"))
+    tabela_fonte = qualidade.pivot(index="ano", columns="trecho_id", values="fonte_tipo")
+    tabela_fonte.columns = [theme.TRECHO_LABEL[c] for c in tabela_fonte.columns]
+    st.dataframe(tabela_fonte, use_container_width=True)
+
 st.divider()
 st.subheader(i18n.t("series.vazao_chuva_subheader"))
 st.caption(i18n.t("series.aviso_real"))

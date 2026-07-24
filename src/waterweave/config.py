@@ -34,7 +34,19 @@ RAW_SOURCES = {
         "baixo_tiete": RAW_DATA_DIR / "BAIXO TIETE_PLUV",
     },
     "estacoes": RAW_DATA_DIR / "cod_latlong.xlsx",
+    # 2.397.437 medições REAIS da rede CETESB (1978-2024), ingeridas por
+    # `ingestion.bronze_cetesb` / `transform.silver_qualidade_cetesb` — fonte
+    # primária de iqa/od_mg_l/dbo_mg_l/metais_pesados_ppm (ver ACHADO DE
+    # AUDITORIA em `ingestion.monthly_job`: até 2026-07 esta fonte estava
+    # declarada aqui mas nunca era lida).
     "pontos_consolidados": RAW_DATA_DIR / "base_de_dados_pontos.xlsx",
+    # Reclassificada (2026-07): NÃO é mais fonte de produção para
+    # iqa/od_mg_l/dbo_mg_l/metais_pesados_ppm — `transform.gold_features.
+    # qualidade_real_com_fallback_simulado` só usa esta série (via
+    # `silver_qualidade.build_silver_qualidade`) para preencher anos sem
+    # cobertura real da CETESB (1940-1977 e lacunas pontuais). Continua sendo
+    # a única fonte para uso_solo/pesticidas_ppm/materia_organica_pct, que a
+    # CETESB não mede.
     "qualidade_solo_sedimentos": RAW_DATA_DIR / "Planilha_Historica_Solo_Sedimentos_Rio_Tiete_1940_2025.xlsx",
     "sensoriamento_remoto": RAW_DATA_DIR / "Sensoriamento_Remoto_Rio_Tiete.xlsx",
 }

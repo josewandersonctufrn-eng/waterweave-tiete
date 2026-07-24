@@ -1,7 +1,13 @@
 """Conector para dados de qualidade de água da CETESB (IQA, DBO, OD, metais, etc.).
 
-Substituirá `bronze_qualidade_solo.py` (hoje simulado) por observações reais
-publicadas pela CETESB — mas, ao contrário de `connectors.ana_snirh`, NÃO
+ATUALIZAÇÃO (ver docs/Auditoria_Engenharia_Dados_WaterWeave_Tiete.docx): a
+lacuna que este conector pretendia fechar — observações reais da CETESB, em
+vez da série simulada de `bronze_qualidade_solo.py` — já foi fechada para o
+histórico 1978-2024 por `ingestion.bronze_cetesb` (ingestão em lote de
+`base_de_dados_pontos.xlsx`, um export local já existente, não uma chamada de
+API). O papel que resta para ESTE conector é estritamente incremental: buscar
+apenas os boletins publicados DEPOIS do fim do export local (hoje 2024), nas
+rodadas mensais seguintes — mas, ao contrário de `connectors.ana_snirh`, NÃO
 há uma API pública documentada e estável para isso hoje (pesquisado em
 2026-07):
 

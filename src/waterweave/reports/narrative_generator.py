@@ -1,7 +1,10 @@
 """Gerador de relatórios textuais sintéticos sobre a saúde de um trecho do rio.
 
 Implementação atual opera na granularidade disponível hoje — trecho x ano,
-vinda de `webapp.data_loader.load_qualidade_historica()` (série simulada).
+vinda de `webapp.data_loader.load_qualidade_historica()` (medição REAL da
+CETESB quando disponível, 1978-2024; série simulada só como preenchimento
+dos anos sem essa cobertura — ver `transform.gold_features.qualidade_real_com_fallback_simulado`
+e a coluna `fonte_tipo`).
 Quando a camada Gold tiver granularidade por ponto de monitoramento
 (`gold.serie_temporal_ponto`) e `models.ml.predict_iqa` estiver treinado,
 `gerar_relatorio_trecho` deve trocar sua fonte de dado para essas duas,
