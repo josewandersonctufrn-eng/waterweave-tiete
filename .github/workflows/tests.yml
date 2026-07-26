@@ -1,0 +1,27 @@
+name: Testes
+
+# Roda a suíte tests/ a cada push/PR para main — pega tanto o gap de ingestão original
+# (test_pipeline_paridade.py, RAW_SOURCES sem módulo bronze) quanto qualquer regressão nos
+# achados de auditoria de ML corrigidos em models/ml/* e transform/gold_features.py.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências (produção + dev)
+        run: pip install -r requirements-dev.txt
+
+      - name: Rodar pytest
+        run: pytest tests/ -v

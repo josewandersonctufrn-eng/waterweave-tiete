@@ -24,6 +24,25 @@ python -m waterweave.models.ml.train
 streamlit run src/waterweave/webapp/streamlit_app.py
 ```
 
+## Testes
+
+```powershell
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+Roda automaticamente a cada push/PR para `main` via GitHub Actions
+(`.github/workflows/tests.yml`). Cobre dois tipos de regressão: o gap de
+ingestão original (`test_pipeline_paridade.py` — toda fonte em
+`RAW_SOURCES` precisa ter um módulo `bronze_*.py` que a leia de fato) e os
+achados da auditoria de ML de 2026-07 (`test_ml_features.py`,
+`test_gold_features_ml_anual.py`, `test_ml_train.py`,
+`test_shap_analysis.py` — granularidade anual sem vazamento, separação
+real/simulado no treino, ausência de vazamento temporal no walk-forward,
+SHAP diagnóstico sem lags do próprio alvo; ver docstrings de
+`transform/gold_features.py` e `models/ml/train.py` para o detalhe de cada
+item).
+
 ## Arquitetura de dados (Medallion)
 
 ```

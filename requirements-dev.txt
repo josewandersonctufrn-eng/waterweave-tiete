@@ -1,0 +1,8 @@
+# Dependências só para rodar a suíte de testes (tests/) — não vão para o Streamlit
+# Community Cloud nem para produção. Inclui `-r requirements.txt` porque os testes
+# importam o pacote `waterweave` de verdade (sklearn, shap, deltalake etc.), não usam mocks
+# para as bibliotecas — só para I/O de arquivo (`read_table`, ver tests/conftest.py e
+# tests/test_gold_features_ml_anual.py).
+-r requirements.txt
+
+pytest>=8.0
