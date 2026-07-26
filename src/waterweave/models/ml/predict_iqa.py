@@ -20,6 +20,15 @@ Carrega um modelo POR TRECHO (ver ACHADO DE AUDITORIA DE ML item 2 em
 a linha de entrada NÃO tem mais a coluna `trecho_id` (o modelo já é
 específico daquele trecho, diferente da versão anterior com um modelo único
 para o rio inteiro).
+
+Monta a linha de entrada com `features.preditoras_anuais_do_trecho(trecho_id)`
+(não um dict fixo) porque o conjunto de preditoras já não é mais o mesmo para
+todo trecho: `vazao_m3s_medio` é removida para o Baixo Tietê (ACHADO DE
+AUDITORIA DE ML item 5 em `models.ml.features` — série de vazão com
+inconsistência estrutural documentada), e o modelo salvo para esse trecho
+literalmente não foi treinado com essa coluna — passá-la mesmo assim faz o
+`RandomForestRegressor` rejeitar a previsão (`ValueError: feature names
+should match`).
 """
 from __future__ import annotations
 
@@ -28,6 +37,7 @@ import pandas as pd
 
 from waterweave.config import GOLD_DIR
 from waterweave.io_delta import read_table
+from waterweave.models.ml.features import preditoras_anuais_do_trecho
 from waterweave.models.ml.train import MODELOS_DIR
 
 _JANELA_LAGS = 5
@@ -59,9 +69,11 @@ def prever_iqa(trecho_id: str, horizonte_anos: int) -> pd.DataFrame:
     if historico.dropna(subset=["iqa", "od_mg_l"]).empty:
         raise ValueError(f"Sem histórico de qualidade da água para '{trecho_id}'.")
 
-    recente = historico.dropna(subset=["vazao_m3s_medio", "chuva_mm_media"]).tail(_JANELA_CLIMATOLOGIA_ANOS)
-    vazao_media = recente["vazao_m3s_medio"].mean()
+    preditoras = preditoras_anuais_do_trecho(trecho_id)
+
+    recente = historico.dropna(subset=["chuva_mm_media"]).tail(_JANELA_CLIMATOLOGIA_ANOS)
     chuva_media = recente["chuva_mm_media"].mean()
+    vazao_media = recente["vazao_m3s_medio"].mean() if "vazao_m3s_medio" in preditoras else None
 
     janela_iqa = list(historico["iqa"].dropna())[-_JANELA_LAGS:]
     janela_od = list(historico["od_mg_l"].dropna())[-_JANELA_LAGS:]
@@ -71,23 +83,20 @@ def prever_iqa(trecho_id: str, horizonte_anos: int) -> pd.DataFrame:
     for passo in range(1, horizonte_anos + 1):
         ano_previsto = ultimo_ano + passo
 
-        entrada = pd.DataFrame(
-            [
-                {
-                    "ano": ano_previsto,
-                    "vazao_m3s_medio": vazao_media,
-                    "chuva_mm_media": chuva_media,
-                    "iqa_lag1a": _lag(janela_iqa, 1),
-                    "iqa_lag2a": _lag(janela_iqa, 2),
-                    "iqa_lag3a": _lag(janela_iqa, 3),
-                    "iqa_media_movel_5a": sum(janela_iqa[-5:]) / len(janela_iqa[-5:]),
-                    "od_mg_l_lag1a": _lag(janela_od, 1),
-                    "od_mg_l_lag2a": _lag(janela_od, 2),
-                    "od_mg_l_lag3a": _lag(janela_od, 3),
-                    "od_mg_l_media_movel_5a": sum(janela_od[-5:]) / len(janela_od[-5:]),
-                }
-            ]
-        )
+        valores = {
+            "ano": ano_previsto,
+            "vazao_m3s_medio": vazao_media,
+            "chuva_mm_media": chuva_media,
+            "iqa_lag1a": _lag(janela_iqa, 1),
+            "iqa_lag2a": _lag(janela_iqa, 2),
+            "iqa_lag3a": _lag(janela_iqa, 3),
+            "iqa_media_movel_5a": sum(janela_iqa[-5:]) / len(janela_iqa[-5:]),
+            "od_mg_l_lag1a": _lag(janela_od, 1),
+            "od_mg_l_lag2a": _lag(janela_od, 2),
+            "od_mg_l_lag3a": _lag(janela_od, 3),
+            "od_mg_l_media_movel_5a": sum(janela_od[-5:]) / len(janela_od[-5:]),
+        }
+        entrada = pd.DataFrame([{chave: valores[chave] for chave in preditoras}])
 
         iqa_previsto = float(modelo_iqa.predict(entrada)[0])
         od_previsto = float(modelo_od.predict(entrada)[0])

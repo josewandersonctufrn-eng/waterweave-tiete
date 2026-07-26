@@ -16,6 +16,29 @@ Duas granularidades, DUAS matrizes de features:
   - `PREDITORAS_NUMERICAS_ANUAL` / `montar_matriz_features_anual` — ANUAL, a
     partir de `gold.feature_store_ml_anual`. Sem repetição — é a que
     `models.ml.train` e `models.ml.shap_analysis` usam hoje.
+
+ACHADO DE AUDITORIA DE ML (item 5 — qualidade desigual de vazão entre
+trechos): o relatório de análise hidrológica avançada mostrou que a série de
+vazão do Baixo Tietê tem inconsistência estrutural (curva de dupla massa com
+quebra abrupta ~1980; razão Q5/Q95 de 3.473x na curva de permanência, contra
+115-212x nos outros trechos) — sintoma de mistura de postos com escala
+diferente ao longo do tempo, não um regime hidrológico real. Usar
+`vazao_m3s_medio` como preditora nesse trecho arrisca injetar ruído
+estrutural, não sinal. `TRECHOS_SEM_VAZAO_CONFIAVEL` remove essa preditora
+só para os trechos marcados — `chuva_mm_media` não tem esse problema (0% de
+nulos, série internamente consistente nos 3 trechos) e continua em todos.
+
+ACHADO DE AUDITORIA DE ML (item 8 — SHAP dominado por autocorrelação):
+mesmo sem o vazamento mensal (item 1), `{alvo}_lag1a` domina o SHAP dos
+modelos por ser, genuinamente, a feature mais forte numa série com
+autocorrelação temporal real. Isso é adequado para PREVISÃO, mas inútil para
+perguntar "o que reduz a poluição" — para isso, `PREDITORAS_DRIVERS_ANUAL` /
+`montar_matriz_features_drivers_por_trecho` monta uma matriz SEM os lags do
+próprio alvo (só ano, vazão, chuva), usada por
+`models.ml.shap_analysis.explicar_modelo_drivers` para um SHAP de
+interpretação causal-adjacente — NUNCA para o modelo de produção, que
+continua usando `PREDITORAS_NUMERICAS_ANUAL` (com lags) por ser mais preciso
+para previsão de curto prazo.
 """
 from __future__ import annotations
 
@@ -82,16 +105,56 @@ def montar_matriz_features_anual(gold_df: pd.DataFrame, alvo: str) -> tuple[pd.D
     return completo[TODAS_PREDITORAS_ANUAL], completo[alvo]
 
 
+# Trechos cuja série de vazão tem inconsistência estrutural documentada (ver ACHADO DE
+# AUDITORIA DE ML item 5, docstring do módulo) — `vazao_m3s_medio` é removida das preditoras
+# só para esses trechos.
+TRECHOS_SEM_VAZAO_CONFIAVEL = {"baixo_tiete"}
+
+
+def preditoras_anuais_do_trecho(trecho_id: str) -> list[str]:
+    """Lista de preditoras numéricas anuais para `trecho_id` — igual a `PREDITORAS_NUMERICAS_ANUAL`,
+    exceto `vazao_m3s_medio` removida para trechos em `TRECHOS_SEM_VAZAO_CONFIAVEL`."""
+    if trecho_id in TRECHOS_SEM_VAZAO_CONFIAVEL:
+        return [p for p in PREDITORAS_NUMERICAS_ANUAL if p != "vazao_m3s_medio"]
+    return list(PREDITORAS_NUMERICAS_ANUAL)
+
+
 def montar_matriz_features_anual_por_trecho(gold_df: pd.DataFrame, alvo: str, trecho_id: str) -> tuple[pd.DataFrame, pd.Series]:
     """Mesma matriz anual, mas filtrada a UM trecho e sem a coluna categórica `trecho_id`
-    (redundante quando o modelo já é específico de um trecho).
+    (redundante quando o modelo já é específico de um trecho). Para trechos em
+    `TRECHOS_SEM_VAZAO_CONFIAVEL`, `vazao_m3s_medio` não entra como preditora (item 5).
 
     ACHADO DE AUDITORIA DE ML (2026-07, item 2 — generalização espacial): o teste de
     generalização cruzada entre trechos (Seção 23 do relatório de EDA) mostrou R² negativo
     em TODA transferência Alto↔Médio↔Baixo Tietê — um único modelo com `trecho_id` como
     feature categórica está tentando aprender uma relação que muda de patamar/inclinação
     entre trechos. Modelos separados por trecho (`models.ml.train`) evitam essa mistura."""
-    colunas_necessarias = [*PREDITORAS_NUMERICAS_ANUAL, alvo]
+    preditoras = preditoras_anuais_do_trecho(trecho_id)
+    colunas_necessarias = [*preditoras, alvo]
     subconjunto = gold_df[gold_df["trecho_id"] == trecho_id]
     completo = subconjunto.dropna(subset=colunas_necessarias)
-    return completo[PREDITORAS_NUMERICAS_ANUAL], completo[alvo]
+    return completo[preditoras], completo[alvo]
+
+
+# --- Preditoras "drivers" (sem lags do próprio alvo) — item 8, ver docstring do módulo -----
+PREDITORAS_DRIVERS_ANUAL = ["ano", "vazao_m3s_medio", "chuva_mm_media"]
+
+
+def preditoras_drivers_do_trecho(trecho_id: str) -> list[str]:
+    """Igual a `PREDITORAS_DRIVERS_ANUAL`, exceto `vazao_m3s_medio` removida para trechos em
+    `TRECHOS_SEM_VAZAO_CONFIAVEL` (mesma lógica do item 5, aplicada aqui também)."""
+    if trecho_id in TRECHOS_SEM_VAZAO_CONFIAVEL:
+        return [p for p in PREDITORAS_DRIVERS_ANUAL if p != "vazao_m3s_medio"]
+    return list(PREDITORAS_DRIVERS_ANUAL)
+
+
+def montar_matriz_features_drivers_por_trecho(gold_df: pd.DataFrame, alvo: str, trecho_id: str) -> tuple[pd.DataFrame, pd.Series]:
+    """Matriz anual SEM os lags do próprio alvo — só ano/vazão/chuva. Usada exclusivamente
+    por `models.ml.shap_analysis.explicar_modelo_drivers` para uma leitura de
+    interpretabilidade menos dominada por autocorrelação (item 8) — NÃO usada para o modelo
+    de produção (`models.ml.train`), que precisa dos lags para ter precisão de previsão."""
+    preditoras = preditoras_drivers_do_trecho(trecho_id)
+    colunas_necessarias = [*preditoras, alvo]
+    subconjunto = gold_df[gold_df["trecho_id"] == trecho_id]
+    completo = subconjunto.dropna(subset=colunas_necessarias)
+    return completo[preditoras], completo[alvo]

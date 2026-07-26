@@ -87,6 +87,20 @@ def build_feature_store_ml(serie: pd.DataFrame) -> pd.DataFrame:
     return tabela
 
 
+
+# ACHADO DE AUDITORIA DE ML (item 6 — dropna agressivo): `montar_matriz_features_anual*`
+# descarta a linha inteira se QUALQUER preditora estiver nula — para vazao_m3s_medio, isso
+# penaliza desproporcionalmente Alto Tietê (~27% de anos sem medição) e Baixo Tietê (~10%),
+# ver relatório de qualidade de dados hidrológicos. Preencher esses buracos com o último ano
+# conhecido (forward-fill, LIMITADO a 2 anos consecutivos — nunca com mais que isso, para não
+# inventar um regime hidrológico inteiro sobre uma lacuna grande) recupera linhas de treino
+# sem inflar a confiança em anos realmente sem dado. NÃO se aplica aos lags/média móvel de
+# iqa/od_mg_l: uma lacuna real ali significa "não sabemos o valor de X anos atrás", e
+# imputar isso esconderia incerteza genuína sobre o próprio alvo, não sobre uma preditora
+# exógena — ver docstring do módulo.
+_LIMITE_PREENCHIMENTO_ANOS = 2
+
+
 def build_feature_store_ml_anual() -> pd.DataFrame:
     """Feature store ANUAL para os modelos de ML — uma linha por (trecho, ano), sem repetição
     mensal. Substitui `build_feature_store_ml` como fonte de treino (ver ACHADO DE AUDITORIA
@@ -94,7 +108,9 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
 
     Constrói diretamente a partir de `qualidade_real_com_fallback_simulado` (já anual) e de
     vazão/chuva mensais agregadas ao ano inteiro — não passa por `serie_temporal_trecho_mes`
-    (que existe para exibição mensal no dashboard, não para treino de modelo)."""
+    (que existe para exibição mensal no dashboard, não para treino de modelo). Preenche
+    lacunas curtas (até `_LIMITE_PREENCHIMENTO_ANOS` anos) de vazão/chuva por
+    forward-fill dentro do trecho — ver ACHADO DE AUDITORIA DE ML item 6 acima."""
     qualidade = qualidade_real_com_fallback_simulado()
     vazao = read_table(SILVER_DIR / "vazao_mensal")
     chuva = read_table(SILVER_DIR / "chuva_mensal")
@@ -109,6 +125,13 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
     tabela = qualidade.merge(vazao_anual, on=["trecho_id", "ano"], how="left")
     tabela = tabela.merge(chuva_anual, on=["trecho_id", "ano"], how="left")
     tabela = tabela.sort_values(["trecho_id", "ano"]).reset_index(drop=True)
+
+    for coluna in ("vazao_m3s_medio", "chuva_mm_media"):
+        preenchido = tabela.groupby("trecho_id")[coluna].transform(
+            lambda s: s.ffill(limit=_LIMITE_PREENCHIMENTO_ANOS)
+        )
+        tabela[f"{coluna}_imputado"] = tabela[coluna].isna() & preenchido.notna()
+        tabela[coluna] = preenchido
 
     for coluna in ("iqa", "od_mg_l"):
         grupo = tabela.groupby("trecho_id")[coluna]
