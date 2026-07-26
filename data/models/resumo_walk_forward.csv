@@ -1,6 +1,6 @@
 trecho_id,alvo,n_folds,mae_medio,mae_mediana,mae_desvio,rmse_medio,r2_medio,mae_baseline_medio,pct_folds_supera_baseline
-alto_tiete,iqa,11,6.5704,3.9081,6.0504,6.5704,,5.9254,45.4545
-alto_tiete,od_mg_l,11,0.4448,0.3252,0.3137,0.4448,,0.2397,27.2727
+alto_tiete,iqa,11,6.9456,7.6762,5.8039,6.9456,,5.9254,36.3636
+alto_tiete,od_mg_l,11,0.3767,0.2678,0.2315,0.3767,,0.2397,27.2727
 baixo_tiete,iqa,11,4.6881,3.7172,2.925,4.6881,,5.6307,63.6364
 baixo_tiete,od_mg_l,11,0.3964,0.211,0.3773,0.3964,,0.5637,63.6364
 medio_tiete,iqa,11,6.9602,3.1525,6.1959,6.9602,,10.2733,81.8182

@@ -13,6 +13,8 @@ requests>=2.32  # conector ANA/SNIRH (connectors/ana_snirh.py)
 
 # Modelagem híbrida
 scikit-learn>=1.5
+shap>=0.45  # models/ml/shap_analysis.py importa `shap` diretamente — faltava aqui (nenhum
+            # ambiente que só rodasse `pip install -r requirements.txt` teria o módulo)
 joblib>=1.4
 mesa>=3.0
 networkx>=3.0  # dependência real do mesa (mesa.discrete_space importa networkx sem condição);
