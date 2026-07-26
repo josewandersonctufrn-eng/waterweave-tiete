@@ -6,10 +6,30 @@ Tabelas produzidas:
     qualidade da água do ano correspondente (a série de qualidade é anual,
     então é repetida em todos os meses daquele ano — granularidade real,
     não inventada). É a tabela que o dashboard consome diretamente.
-  - `gold.feature_store_ml`: mesma granularidade, com lags e média móvel de
-    IQA/OD para os modelos de ML.
+  - `gold.feature_store_ml`: mesma granularidade MENSAL, com lags e média
+    móvel de IQA/OD. MANTIDA por compatibilidade, mas NÃO É MAIS a fonte de
+    treino dos modelos (ver ACHADO DE AUDITORIA DE ML abaixo) — hoje só serve
+    quem eventualmente precise de vazão/chuva mensal com lag; para
+    qualidade da água, use `gold.feature_store_ml_anual`.
+  - `gold.feature_store_ml_anual`: uma linha por (trecho, ano), com lags e
+    média móvel de IQA/OD em ANOS — fonte de treino correta e atual dos
+    modelos de ML (ver `models.ml.train`).
   - `gold.estado_inicial_abm`: snapshot mais recente por trecho, usado para
     inicializar o `Model` do Mesa a cada rodada de simulação.
+
+ACHADO DE AUDITORIA DE ML (2026-07): `iqa`/`od_mg_l`/`dbo_mg_l`/
+`metais_pesados_ppm` só existem em granularidade ANUAL na fonte (tanto a
+CETESB real quanto o fallback simulado) — `build_serie_temporal_trecho_mes`
+repete o mesmo valor anual nos 12 meses do ano para poder casar com a
+granularidade mensal de vazão/chuva no dashboard (isso é correto e honesto
+para EXIBIÇÃO). Mas usar essa série repetida como base para `_lag1m` em
+`build_feature_store_ml` é uma armadilha: como o valor é constante dentro do
+ano, `iqa_lag1m` é literalmente igual ao alvo em 11 dos 12 meses — o modelo
+antigo estava, na prática, copiando um valor já conhecido na maior parte do
+tempo, não prevendo genuinamente (ver o baseline de persistência adicionado
+em `models.ml.train` para essa mesma auditoria, que tornou isso visível nas
+métricas). `build_feature_store_ml_anual` corrige isso: uma linha por
+(trecho, ano), sem repetição — a mesma granularidade real da variável-alvo.
 """
 from __future__ import annotations
 
@@ -19,6 +39,7 @@ from waterweave.config import FONTE_TIPO_OBSERVADO, FONTE_TIPO_SIMULADO, GOLD_DI
 from waterweave.io_delta import read_table, write_table
 
 LAGS_MESES = (1, 3, 12)
+LAGS_ANOS = (1, 2, 3)
 
 
 def qualidade_real_com_fallback_simulado() -> pd.DataFrame:
@@ -66,6 +87,38 @@ def build_feature_store_ml(serie: pd.DataFrame) -> pd.DataFrame:
     return tabela
 
 
+def build_feature_store_ml_anual() -> pd.DataFrame:
+    """Feature store ANUAL para os modelos de ML — uma linha por (trecho, ano), sem repetição
+    mensal. Substitui `build_feature_store_ml` como fonte de treino (ver ACHADO DE AUDITORIA
+    DE ML na docstring do módulo).
+
+    Constrói diretamente a partir de `qualidade_real_com_fallback_simulado` (já anual) e de
+    vazão/chuva mensais agregadas ao ano inteiro — não passa por `serie_temporal_trecho_mes`
+    (que existe para exibição mensal no dashboard, não para treino de modelo)."""
+    qualidade = qualidade_real_com_fallback_simulado()
+    vazao = read_table(SILVER_DIR / "vazao_mensal")
+    chuva = read_table(SILVER_DIR / "chuva_mensal")
+
+    vazao_anual = vazao.groupby(["trecho_id", "ano"], as_index=False).agg(
+        vazao_m3s_medio=("vazao_m3s", "mean"), n_meses_vazao=("mes", "nunique")
+    )
+    chuva_anual = chuva.groupby(["trecho_id", "ano"], as_index=False).agg(
+        chuva_mm_media=("altura_mm", "mean"), n_meses_chuva=("mes", "nunique")
+    )
+
+    tabela = qualidade.merge(vazao_anual, on=["trecho_id", "ano"], how="left")
+    tabela = tabela.merge(chuva_anual, on=["trecho_id", "ano"], how="left")
+    tabela = tabela.sort_values(["trecho_id", "ano"]).reset_index(drop=True)
+
+    for coluna in ("iqa", "od_mg_l"):
+        grupo = tabela.groupby("trecho_id")[coluna]
+        for lag in LAGS_ANOS:
+            tabela[f"{coluna}_lag{lag}a"] = grupo.shift(lag)
+        tabela[f"{coluna}_media_movel_5a"] = grupo.transform(lambda s: s.rolling(5, min_periods=2).mean())
+
+    return tabela
+
+
 def build_estado_inicial_abm(serie: pd.DataFrame) -> pd.DataFrame:
     """Snapshot mais recente (com qualidade da água disponível) por trecho, para inicializar o ABM."""
     valido = serie.dropna(subset=["iqa"]).sort_values("mes_data")
@@ -74,17 +127,25 @@ def build_estado_inicial_abm(serie: pd.DataFrame) -> pd.DataFrame:
 
 
 def run() -> dict[str, pd.DataFrame]:
-    """Constrói e grava as três tabelas Gold, nessa ordem de dependência."""
+    """Constrói e grava as quatro tabelas Gold, nessa ordem de dependência."""
     serie = build_serie_temporal_trecho_mes()
     write_table(GOLD_DIR / "serie_temporal_trecho_mes", serie, partition_by=["trecho_id"])
 
     features = build_feature_store_ml(serie)
     write_table(GOLD_DIR / "feature_store_ml", features, partition_by=["trecho_id"])
 
+    features_anual = build_feature_store_ml_anual()
+    write_table(GOLD_DIR / "feature_store_ml_anual", features_anual, partition_by=["trecho_id"])
+
     estado_inicial = build_estado_inicial_abm(serie)
     write_table(GOLD_DIR / "estado_inicial_abm", estado_inicial)
 
-    return {"serie_temporal_trecho_mes": serie, "feature_store_ml": features, "estado_inicial_abm": estado_inicial}
+    return {
+        "serie_temporal_trecho_mes": serie,
+        "feature_store_ml": features,
+        "feature_store_ml_anual": features_anual,
+        "estado_inicial_abm": estado_inicial,
+    }
 
 
 if __name__ == "__main__":
