@@ -11,6 +11,23 @@ animação solta.
 
 Suporta os 4 idiomas do dashboard (`webapp.i18n`) — inclusive o texto embutido na cena 3D,
 que recebe os rótulos já traduzidos via `renderizar_html(..., textos=...)`.
+
+ACHADO DE PESQUISA (2026-07, itens 5/6/7 do roadmap de pesquisa WaterWeave-Water4All), 3 seções
+novas abaixo da cena 3D:
+  - "Serviços Ecossistêmicos" (item 5): os 3 indicadores de `models.servicos_ecossistemicos`
+    (regulação da qualidade da água, provisão hídrica, suporte à biodiversidade), calculados a
+    partir do último ano do cenário controlado — só aqui (não na série histórica real, ver
+    ACHADO DE PESQUISA naquele módulo) o suporte à biodiversidade é computável.
+  - "Validação cruzada: ML vs. Biofísico" (item 6): compara a previsão estatística
+    (`models.ml.predict_iqa`) com a simulação determinística deste trecho no cenário "Atual" —
+    ver `models.ml.comparacao_biofisico_ml` para a ressalva sobre âncoras de tempo diferentes.
+    Degrada graciosamente (mensagem em vez de erro) se os modelos de ML ainda não foram
+    treinados no ambiente atual.
+  - "Propostas da comunidade" (item 7, co-criação): salvar a configuração atual como uma
+    proposta nomeada (nome, autor, justificativa) e recarregar propostas salvas por outros
+    participantes — ver `models.abm.scenario_store`. O reload usa `st.session_state[key] = valor`
+    seguido de `st.rerun()` (por isso os widgets de controle acima têm `key=` explícito, ver
+    comentário antes da seleção de trecho/horizonte).
 """
 from __future__ import annotations
 
@@ -26,11 +43,25 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from waterweave.config import TRECHOS
+from waterweave.models import servicos_ecossistemicos as se
+from waterweave.models.abm import scenario_store
 from waterweave.models.abm.scenarios import rodar_cenario_customizado
 from waterweave.reports.pdf_generator import gerar_relatorio_cenario_pdf_completo, gerar_relatorio_cenario_pdf_resumido
 from waterweave.thresholds import STATUS, status_para_iqa
 from waterweave.webapp import i18n, theme
 from waterweave.webapp.components.rio_3d import renderizar_html
+
+# `comparacao_biofisico_ml` importa a cadeia de treino de ML (`sklearn`/`joblib`) e do ABM
+# (`mesa`) — ambos já são dependências reais do projeto (`requirements.txt`), mas o import fica
+# isolado num try/except para a página inteira não quebrar se, por algum motivo de ambiente,
+# essa cadeia falhar (ver item 6 do roadmap de pesquisa: "acoplar" ML e biofísico é um EXTRA
+# desta página, não deveria conseguir derrubar a simulação principal).
+try:
+    from waterweave.models.ml.comparacao_biofisico_ml import LIMIAR_DIVERGENCIA_IQA, comparar_ml_vs_biofisico
+
+    _VALIDACAO_CRUZADA_DISPONIVEL = True
+except ImportError:
+    _VALIDACAO_CRUZADA_DISPONIVEL = False
 
 st.set_page_config(page_title="Cenários Futuros — WaterWeave-Tietê", page_icon="🔮", layout="wide")
 theme.inject_style()
@@ -103,17 +134,27 @@ NAO_CONTROLADO_BASE = dict(
 )
 
 # ---------------------------------------------------------------------------
+# Co-criação (item 7 do roadmap de pesquisa): se o usuário clicou em "Carregar esta proposta"
+# no passo anterior, os valores dos widgets abaixo foram gravados em `st.session_state` ANTES
+# do rerun (ver seção "Propostas da comunidade", mais abaixo) — só precisam já existir em
+# `st.session_state` para os widgets (todos com `key=` correspondente) nascerem com esse valor
+# nesta execução, sem precisar de nenhuma lógica extra aqui.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Seleção de trecho e horizonte
 # ---------------------------------------------------------------------------
 col_trecho, col_horizonte, col_clima = st.columns([1.2, 1.4, 1])
 with col_trecho:
-    trecho_id = st.selectbox(i18n.t("cf.trecho_rio"), options=TRECHO_IDS, format_func=lambda t: theme.TRECHO_LABEL[t])
+    trecho_id = st.selectbox(
+        i18n.t("cf.trecho_rio"), options=TRECHO_IDS, format_func=lambda t: theme.TRECHO_LABEL[t], key="trecho_id"
+    )
 with col_horizonte:
-    horizonte_anos = st.slider(i18n.t("cf.horizonte"), 5, 30, 15, step=1)
+    horizonte_anos = st.slider(i18n.t("cf.horizonte"), 5, 30, 15, step=1, key="horizonte_anos")
 with col_clima:
     clima_pct = st.slider(
         i18n.t("cf.clima_esperado"), 60, 105, 90, format="%d%%",
-        help=i18n.t("cf.clima_help"),
+        help=i18n.t("cf.clima_help"), key="clima_pct",
     )
     clima_severidade = clima_pct / 100.0
     _selo_impacto(i18n.t("cf.cenario_climatico"), (clima_pct - 60) / 45 * 100, cor_ruim=_COR_SECA, pulsar_critico=False)
@@ -137,7 +178,7 @@ with col_controles:
     with tab_fis:
         st.caption(i18n.t("cf.fatores_fisicos.desc"))
         st.markdown(i18n.t("cf.fatores_fisicos.itens"))
-        controlar_fisico = st.checkbox(i18n.t("cf.controlar_sedimentos"), value=True)
+        controlar_fisico = st.checkbox(i18n.t("cf.controlar_sedimentos"), value=True, key="controlar_fisico")
         esforco_fisico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_fisico", disabled=not controlar_fisico)
         _selo_impacto(i18n.t("cf.turbidez_solidos"), esforco_fisico if controlar_fisico else 0)
         st.caption(i18n.t("cf.temperatura_nota"))
@@ -145,10 +186,10 @@ with col_controles:
     with tab_quim:
         st.caption(i18n.t("cf.fatores_quimicos.desc"))
         st.markdown(i18n.t("cf.fatores_quimicos.itens"))
-        controlar_organico = st.checkbox(i18n.t("cf.controlar_esgoto"), value=True)
+        controlar_organico = st.checkbox(i18n.t("cf.controlar_esgoto"), value=True, key="controlar_organico")
         esforco_organico = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_organico", disabled=not controlar_organico)
         _selo_impacto(i18n.t("cf.esgoto_od_dbo"), esforco_organico if controlar_organico else 0)
-        controlar_nutrientes = st.checkbox(i18n.t("cf.controlar_fertilizantes"), value=True)
+        controlar_nutrientes = st.checkbox(i18n.t("cf.controlar_fertilizantes"), value=True, key="controlar_nutrientes")
         esforco_nutrientes = st.slider(i18n.t("cf.esforco"), 0, 100, 60, format="%d%%", key="esforco_nutrientes", disabled=not controlar_nutrientes)
         _selo_impacto(i18n.t("cf.nutrientes_eutrofizacao"), esforco_nutrientes if controlar_nutrientes else 0)
 
@@ -158,7 +199,7 @@ with col_controles:
         st.caption(i18n.t("cf.biologicos_nota"))
         outorga_piso = st.slider(
             i18n.t("cf.vazao_ecologica"), 0.30, 0.95, 0.60, step=0.05, format="%.2f",
-            help=i18n.t("cf.vazao_help"),
+            help=i18n.t("cf.vazao_help"), key="outorga_piso",
         )
         _selo_impacto(i18n.t("cf.diluicao_vazao"), (outorga_piso - 0.30) / 0.65 * 100, cor_ruim=_COR_ESCASSEZ)
 
@@ -257,6 +298,138 @@ with col_cena:
         file_name=f"cenario_{trecho_id}_{horizonte_anos}anos_{formato_pdf}.pdf",
         mime="application/pdf",
     )
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Serviços Ecossistêmicos (item 5 do roadmap de pesquisa) — regulação da qualidade da água,
+# provisão hídrica e suporte à biodiversidade, calculados a partir do ÚLTIMO ano simulado do
+# cenário controlado. Ver `models.servicos_ecossistemicos` para a definição de cada um.
+# ---------------------------------------------------------------------------
+st.subheader(i18n.t("cf.servicos_titulo"))
+st.caption(i18n.t("cf.servicos_desc"))
+
+ultimo_ano_controlado = serie_c[-1]
+captacao_necessaria_trecho = float(
+    hist_controlado.loc[hist_controlado.trecho_id == trecho_id, "captacao_necessaria_m3s"].iloc[0]
+)
+servicos = se.ServicosEcossistemicos(
+    regulacao_qualidade_agua=se.regulacao_qualidade_agua(ultimo_ano_controlado["iqa"]),
+    provisao_hidrica=se.provisao_hidrica(ultimo_ano_controlado["vazao_m3s_medio"], captacao_necessaria_trecho),
+    suporte_biodiversidade=se.suporte_biodiversidade(
+        ultimo_ano_controlado["od_mg_l"],
+        ultimo_ano_controlado["turbidez_ntu"],
+        ultimo_ano_controlado["metais_toxicos_indice"],
+    ),
+)
+
+col_serv1, col_serv2, col_serv3 = st.columns(3)
+col_serv1.metric(i18n.t("cf.servico_regulacao"), f"{servicos.regulacao_qualidade_agua * 100:.0f}%")
+col_serv2.metric(i18n.t("cf.servico_provisao"), f"{servicos.provisao_hidrica * 100:.0f}%")
+col_serv3.metric(i18n.t("cf.servico_biodiversidade"), f"{servicos.suporte_biodiversidade * 100:.0f}%")
+
+# ---------------------------------------------------------------------------
+# Validação cruzada ML vs. Biofísico (item 6 do roadmap de pesquisa) — compara a previsão
+# estatística (`models.ml.predict_iqa`, treinada no histórico real) com a simulação
+# determinística do cenário "Atual" para o mesmo trecho/horizonte. Ver ACHADO DE PESQUISA em
+# `models.ml.comparacao_biofisico_ml` para a ressalva sobre âncoras de tempo diferentes.
+# ---------------------------------------------------------------------------
+with st.expander(i18n.t("cf.validacao_titulo")):
+    st.caption(i18n.t("cf.validacao_desc"))
+    if not _VALIDACAO_CRUZADA_DISPONIVEL:
+        st.info(i18n.t("cf.validacao_indisponivel"))
+    else:
+        try:
+            comparacao = comparar_ml_vs_biofisico(trecho_id, horizonte_anos)
+        except FileNotFoundError:
+            st.info(i18n.t("cf.validacao_indisponivel"))
+        else:
+            tabela_exibicao = comparacao.rename(
+                columns={
+                    "passo": i18n.t("cf.validacao_coluna_passo"),
+                    "iqa_ml": i18n.t("cf.validacao_coluna_iqa_ml"),
+                    "iqa_biofisico": i18n.t("cf.validacao_coluna_iqa_biofisico"),
+                    "diferenca_abs_iqa": i18n.t("cf.validacao_coluna_diferenca"),
+                    "divergem": i18n.t("cf.validacao_coluna_divergem"),
+                }
+            )[
+                [
+                    i18n.t("cf.validacao_coluna_passo"), i18n.t("cf.validacao_coluna_iqa_ml"),
+                    i18n.t("cf.validacao_coluna_iqa_biofisico"), i18n.t("cf.validacao_coluna_diferenca"),
+                    i18n.t("cf.validacao_coluna_divergem"),
+                ]
+            ]
+            st.dataframe(tabela_exibicao, hide_index=True, use_container_width=True)
+            st.caption(f"{i18n.t('cf.validacao_coluna_divergem')}: |Δ IQA| > {LIMIAR_DIVERGENCIA_IQA:.0f}")
+
+# ---------------------------------------------------------------------------
+# Co-criação: propostas de cenário (item 7 do roadmap de pesquisa) — salvar a configuração
+# atual como uma proposta nomeada, e listar/recarregar propostas já salvas por outros
+# participantes. Ver `models.abm.scenario_store`.
+# ---------------------------------------------------------------------------
+st.divider()
+st.subheader(i18n.t("cf.propostas_titulo"))
+st.caption(i18n.t("cf.propostas_desc"))
+
+with st.form("form_salvar_proposta", clear_on_submit=True):
+    st.markdown(f"**{i18n.t('cf.salvar_proposta_titulo')}**")
+    nome_proposta = st.text_input(i18n.t("cf.proposta_nome"))
+    autor_proposta = st.text_input(i18n.t("cf.proposta_autor"))
+    justificativa_proposta = st.text_area(i18n.t("cf.proposta_justificativa"))
+    salvar_clicado = st.form_submit_button(i18n.t("cf.proposta_salvar_botao"))
+
+if salvar_clicado:
+    if not nome_proposta.strip():
+        st.warning(i18n.t("cf.proposta_nome_obrigatorio"))
+    else:
+        scenario_store.salvar_proposta(
+            nome=nome_proposta.strip(),
+            autor=autor_proposta.strip(),
+            justificativa=justificativa_proposta.strip(),
+            trecho_id=trecho_id,
+            horizonte_anos=horizonte_anos,
+            parametros={**CONTROLADO_PARAMS, "fator_clima": clima_severidade},
+            resumo_metricas={
+                "iqa_final": ultimo_ano_controlado["iqa"],
+                "regulacao_qualidade_agua": servicos.regulacao_qualidade_agua,
+                "provisao_hidrica": servicos.provisao_hidrica,
+                "suporte_biodiversidade": servicos.suporte_biodiversidade,
+            },
+            controles_ui={
+                "trecho_id": trecho_id, "horizonte_anos": horizonte_anos, "clima_pct": clima_pct,
+                "controlar_fisico": controlar_fisico, "esforco_fisico": esforco_fisico,
+                "controlar_organico": controlar_organico, "esforco_organico": esforco_organico,
+                "controlar_nutrientes": controlar_nutrientes, "esforco_nutrientes": esforco_nutrientes,
+                "outorga_piso": outorga_piso,
+            },
+        )
+        st.success(i18n.t("cf.proposta_salva_sucesso"))
+
+propostas_salvas = scenario_store.listar_propostas()
+if not propostas_salvas:
+    st.caption(i18n.t("cf.propostas_vazio"))
+else:
+    for proposta in propostas_salvas:
+        with st.container(border=True):
+            col_info, col_botao = st.columns([4, 1])
+            with col_info:
+                st.markdown(f"**{proposta.nome}**")
+                if proposta.justificativa:
+                    st.caption(proposta.justificativa)
+                st.caption(
+                    i18n.t("cf.proposta_metadados").format(
+                        trecho=theme.TRECHO_LABEL.get(proposta.trecho_id, proposta.trecho_id),
+                        horizonte=proposta.horizonte_anos,
+                        autor=proposta.autor or "—",
+                        data=proposta.criado_em[:10],
+                    )
+                )
+            with col_botao:
+                if st.button(i18n.t("cf.proposta_carregar_botao"), key=f"carregar_{proposta.id}"):
+                    for chave, valor in proposta.controles_ui.items():
+                        st.session_state[chave] = valor
+                    st.success(i18n.t("cf.proposta_carregada_sucesso"))
+                    st.rerun()
 
 with st.expander(i18n.t("cf.como_calculado")):
     st.markdown(i18n.t("cf.como_calculado.texto"))

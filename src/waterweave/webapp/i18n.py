@@ -663,6 +663,58 @@ _T: dict[str, dict[str, str]] = {
         "es": "💡 El color del agua en la escena 3D cambia en tiempo real: vea la leyenda al pie de la animación para saber qué significa cada tono.",
     },
 
+    # ---- Serviços Ecossistêmicos (item 5 do roadmap de pesquisa) -------------------------
+    "cf.servicos_titulo": {"pt": "🌿 Serviços ecossistêmicos entregues", "en": "🌿 Ecosystem services delivered", "fr": "🌿 Services écosystémiques rendus", "es": "🌿 Servicios ecosistémicos entregados"},
+    "cf.servicos_desc": {
+        "pt": "Fração da capacidade máxima de cada serviço, no cenário controlado, no último ano simulado.",
+        "en": "Fraction of each service's maximum capacity, under the controlled scenario, in the last simulated year.",
+        "fr": "Fraction de la capacité maximale de chaque service, dans le scénario contrôlé, la dernière année simulée.",
+        "es": "Fracción de la capacidad máxima de cada servicio, en el escenario controlado, en el último año simulado.",
+    },
+    "cf.servico_regulacao": {"pt": "Regulação da qualidade da água", "en": "Water quality regulation", "fr": "Régulation de la qualité de l'eau", "es": "Regulación de la calidad del agua"},
+    "cf.servico_provisao": {"pt": "Provisão hídrica", "en": "Water provisioning", "fr": "Approvisionnement en eau", "es": "Provisión hídrica"},
+    "cf.servico_biodiversidade": {"pt": "Suporte à biodiversidade", "en": "Biodiversity support", "fr": "Soutien à la biodiversité", "es": "Soporte a la biodiversidad"},
+
+    # ---- Validação cruzada ML vs. Biofísico (item 6 do roadmap de pesquisa) --------------
+    "cf.validacao_titulo": {"pt": "🔬 Validação cruzada: ML vs. Biofísico", "en": "🔬 Cross-validation: ML vs. Biophysical", "fr": "🔬 Validation croisée : ML vs. Biophysique", "es": "🔬 Validación cruzada: ML vs. Biofísico"},
+    "cf.validacao_desc": {
+        "pt": "Compara a previsão estatística (aprendida do histórico real) com a simulação determinística deste trecho no cenário 'Atual', passo a passo. Grandes diferenças sinalizam onde os dois modelos discordam sobre o rio.",
+        "en": "Compares the statistical forecast (learned from real history) with this stretch's deterministic simulation under the 'Current' scenario, step by step. Large differences flag where the two models disagree about the river.",
+        "fr": "Compare la prévision statistique (apprise à partir de l'historique réel) à la simulation déterministe de ce tronçon dans le scénario « Actuel », étape par étape. De grandes différences signalent un désaccord entre les deux modèles.",
+        "es": "Compara la previsión estadística (aprendida del histórico real) con la simulación determinística de este tramo en el escenario 'Actual', paso a paso. Grandes diferencias señalan dónde los dos modelos discrepan sobre el río.",
+    },
+    "cf.validacao_indisponivel": {
+        "pt": "Modelos de ML ainda não treinados para este trecho — rode `python -m waterweave.models.ml.train` para habilitar esta comparação.",
+        "en": "ML models not yet trained for this stretch — run `python -m waterweave.models.ml.train` to enable this comparison.",
+        "fr": "Modèles ML pas encore entraînés pour ce tronçon — exécutez `python -m waterweave.models.ml.train` pour activer cette comparaison.",
+        "es": "Modelos de ML aún no entrenados para este tramo — ejecute `python -m waterweave.models.ml.train` para habilitar esta comparación.",
+    },
+    "cf.validacao_coluna_passo": {"pt": "Ano (relativo)", "en": "Year (relative)", "fr": "Année (relative)", "es": "Año (relativo)"},
+    "cf.validacao_coluna_iqa_ml": {"pt": "IQA — ML", "en": "WQI — ML", "fr": "IQE — ML", "es": "ICA — ML"},
+    "cf.validacao_coluna_iqa_biofisico": {"pt": "IQA — Biofísico", "en": "WQI — Biophysical", "fr": "IQE — Biophysique", "es": "ICA — Biofísico"},
+    "cf.validacao_coluna_diferenca": {"pt": "Diferença", "en": "Difference", "fr": "Différence", "es": "Diferencia"},
+    "cf.validacao_coluna_divergem": {"pt": "Divergem?", "en": "Diverge?", "fr": "Divergent ?", "es": "¿Divergen?"},
+
+    # ---- Co-criação: propostas de cenário (item 7 do roadmap de pesquisa) ----------------
+    "cf.propostas_titulo": {"pt": "🤝 Propostas da comunidade", "en": "🤝 Community proposals", "fr": "🤝 Propositions de la communauté", "es": "🤝 Propuestas de la comunidad"},
+    "cf.propostas_desc": {
+        "pt": "Registre esta configuração como uma proposta de gestão nomeada, ou recarregue uma já salva por outro participante.",
+        "en": "Save this configuration as a named management proposal, or reload one already saved by another participant.",
+        "fr": "Enregistrez cette configuration comme une proposition de gestion nommée, ou rechargez-en une déjà enregistrée par un autre participant.",
+        "es": "Registre esta configuración como una propuesta de gestión con nombre, o recargue una ya guardada por otro participante.",
+    },
+    "cf.salvar_proposta_titulo": {"pt": "Salvar esta configuração como proposta", "en": "Save this configuration as a proposal", "fr": "Enregistrer cette configuration comme proposition", "es": "Guardar esta configuración como propuesta"},
+    "cf.proposta_nome": {"pt": "Nome da proposta", "en": "Proposal name", "fr": "Nom de la proposition", "es": "Nombre de la propuesta"},
+    "cf.proposta_autor": {"pt": "Seu nome / organização", "en": "Your name / organization", "fr": "Votre nom / organisation", "es": "Su nombre / organización"},
+    "cf.proposta_justificativa": {"pt": "Por que essa proposta? (opcional)", "en": "Why this proposal? (optional)", "fr": "Pourquoi cette proposition ? (facultatif)", "es": "¿Por qué esta propuesta? (opcional)"},
+    "cf.proposta_salvar_botao": {"pt": "💾 Salvar proposta", "en": "💾 Save proposal", "fr": "💾 Enregistrer la proposition", "es": "💾 Guardar propuesta"},
+    "cf.proposta_salva_sucesso": {"pt": "Proposta salva! Já aparece na lista abaixo.", "en": "Proposal saved! It now appears in the list below.", "fr": "Proposition enregistrée ! Elle apparaît maintenant dans la liste ci-dessous.", "es": "¡Propuesta guardada! Ya aparece en la lista de abajo."},
+    "cf.proposta_nome_obrigatorio": {"pt": "Dê um nome à proposta antes de salvar.", "en": "Give the proposal a name before saving.", "fr": "Donnez un nom à la proposition avant de l'enregistrer.", "es": "Déle un nombre a la propuesta antes de guardar."},
+    "cf.propostas_vazio": {"pt": "Nenhuma proposta salva ainda — seja o primeiro a registrar uma.", "en": "No proposals saved yet — be the first to register one.", "fr": "Aucune proposition enregistrée pour l'instant — soyez le premier à en enregistrer une.", "es": "Aún no hay propuestas guardadas — sea el primero en registrar una."},
+    "cf.proposta_carregar_botao": {"pt": "Carregar esta proposta", "en": "Load this proposal", "fr": "Charger cette proposition", "es": "Cargar esta propuesta"},
+    "cf.proposta_carregada_sucesso": {"pt": "Proposta carregada — os controles acima foram atualizados.", "en": "Proposal loaded — the controls above were updated.", "fr": "Proposition chargée — les contrôles ci-dessus ont été mis à jour.", "es": "Propuesta cargada — los controles de arriba se actualizaron."},
+    "cf.proposta_metadados": {"pt": "{trecho} · {horizonte} anos · por {autor} · salva em {data}", "en": "{trecho} · {horizonte} years · by {autor} · saved on {data}", "fr": "{trecho} · {horizonte} ans · par {autor} · enregistrée le {data}", "es": "{trecho} · {horizonte} años · por {autor} · guardada el {data}"},
+
     # ---- Cena 3D — components/rio_3d.py (texto embutido no HTML/JS) ----------------------
     "r3d.carregando": {"pt": "Carregando cena…", "en": "Loading scene…", "fr": "Chargement de la scène…", "es": "Cargando escena…"},
     "r3d.legenda": {"pt": "🏭 Indústria &nbsp; 🏘️ Residências &nbsp; 🌾 Plantação &nbsp; 🌧️ Chuva", "en": "🏭 Industry &nbsp; 🏘️ Housing &nbsp; 🌾 Farmland &nbsp; 🌧️ Rain", "fr": "🏭 Industrie &nbsp; 🏘️ Logements &nbsp; 🌾 Terres agricoles &nbsp; 🌧️ Pluie", "es": "🏭 Industria &nbsp; 🏘️ Viviendas &nbsp; 🌾 Cultivos &nbsp; 🌧️ Lluvia"},

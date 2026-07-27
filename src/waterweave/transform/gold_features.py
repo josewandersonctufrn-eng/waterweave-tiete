@@ -23,6 +23,11 @@ Tabelas produzidas:
     temperatura de superfície, sólidos suspensos totais, nível d'água) —
     ver ACHADO DE PESQUISA (integração de sensoriamento remoto) abaixo
     para por que ela NÃO é juntada a `feature_store_ml_anual`.
+  - `gold.servicos_ecossistemicos_trecho_ano`: uma linha por (trecho, ano) com os serviços
+    ecossistêmicos de REGULAÇÃO DA QUALIDADE DA ÁGUA e PROVISÃO HÍDRICA (fração 0-1), calculados
+    sobre o histórico REAL — item 5 do roadmap de pesquisa, ver `models.servicos_ecossistemicos`
+    e `build_servicos_ecossistemicos_historico` para por que SUPORTE À BIODIVERSIDADE não entra
+    aqui (só computável no braço simulado do ABM).
 
 ACHADO DE PESQUISA (2026-07, integração de sensoriamento remoto — pesquisa de
 pós-doutorado / projeto WaterWeave-Water4All): `silver.sensoriamento` (NDVI,
@@ -179,6 +184,16 @@ COLUNAS_USO_SOLO = ["pct_natural", "pct_agropecuaria", "pct_urbano_industrial", 
 # até 1940 se um trecho tiver uma lacuna maior que a esperada.
 _LIMITE_PREENCHIMENTO_USO_SOLO_ANOS = 10
 
+# Fração da vazão média histórica de um trecho usada como proxy de "captação necessária" — vale
+# tanto para `models.abm.model.RioTieteModel.captacao_necessaria_m3s` (estresse hídrico) quanto
+# para o serviço ecossistêmico de PROVISÃO HÍDRICA aqui (`build_servicos_ecossistemicos_historico`)
+# — mesma régua nos dois lugares, ver `models.servicos_ecossistemicos`. NÃO é um dado real de
+# outorga (o projeto não ingeriu registro de outorga/uso consuntivo real) — é uma aproximação
+# documentada, definida aqui (a camada mais "de baixo" que os dois consumidores já importam,
+# evitando um import circular: `hybrid_bridge`/`model.py` já importam `gold_features`, não o
+# contrário).
+FRACAO_VAZAO_CAPTACAO_NECESSARIA = 0.15
+
 
 def build_feature_store_ml_anual() -> pd.DataFrame:
     """Feature store ANUAL para os modelos de ML — uma linha por (trecho, ano), sem repetição
@@ -303,6 +318,37 @@ def build_indicadores_sensoriamento_anual() -> pd.DataFrame:
     return agregado.merge(contagem, on=["trecho_id", "ano"], how="left")
 
 
+def build_servicos_ecossistemicos_historico(features_anual: pd.DataFrame) -> pd.DataFrame:
+    """Serviços ecossistêmicos REGULAÇÃO DA QUALIDADE DA ÁGUA e PROVISÃO HÍDRICA, calculados
+    sobre o histórico REAL (uma linha por trecho/ano) — item 5 do roadmap de pesquisa
+    WaterWeave-Water4All. Ver ACHADO DE PESQUISA em `models.servicos_ecossistemicos` para por
+    que SUPORTE À BIODIVERSIDADE não entra aqui (falta série real de turbidez/toxicidade — só
+    computável no braço simulado do ABM, ver `models.servicos_ecossistemicos.calcular_servicos_do_passo`).
+
+    `captacao_necessaria_m3s` usa a MESMA aproximação já empregada pelo ABM
+    (`models.abm.model.RioTieteModel.captacao_necessaria_m3s`, 15% da vazão média histórica do
+    trecho) — não é um dado real de outorga, é a mesma simplificação documentada, aplicada aqui
+    de forma consistente (para o serviço de provisão do histórico e o do ABM usarem a mesma
+    régua)."""
+    from waterweave.models import servicos_ecossistemicos as se
+
+    colunas_base = ["trecho_id", "ano", "iqa", "vazao_m3s_medio"]
+    if "fonte_tipo" in features_anual.columns:
+        colunas_base.append("fonte_tipo")
+    base = features_anual[colunas_base].copy()
+    if base.empty:
+        return base
+
+    necessidade_por_trecho = base.groupby("trecho_id")["vazao_m3s_medio"].mean() * FRACAO_VAZAO_CAPTACAO_NECESSARIA
+    base["captacao_necessaria_m3s"] = base["trecho_id"].map(necessidade_por_trecho)
+
+    base["regulacao_qualidade_agua"] = base["iqa"].map(se.regulacao_qualidade_agua)
+    base["provisao_hidrica"] = base.apply(
+        lambda linha: se.provisao_hidrica(linha["vazao_m3s_medio"], linha["captacao_necessaria_m3s"]), axis=1
+    )
+    return base.sort_values(["trecho_id", "ano"]).reset_index(drop=True)
+
+
 def build_estado_inicial_abm(serie: pd.DataFrame) -> pd.DataFrame:
     """Snapshot mais recente (com qualidade da água disponível) por trecho, para inicializar o ABM."""
     valido = serie.dropna(subset=["iqa"]).sort_values("mes_data")
@@ -330,12 +376,19 @@ def run() -> dict[str, pd.DataFrame]:
     else:
         logger.info("gold.sensoriamento_trecho_ano não gravada: silver.sensoriamento ainda vazia.")
 
+    servicos_ecossistemicos = build_servicos_ecossistemicos_historico(features_anual)
+    if not servicos_ecossistemicos.empty:
+        write_table(GOLD_DIR / "servicos_ecossistemicos_trecho_ano", servicos_ecossistemicos, partition_by=["trecho_id"])
+    else:
+        logger.info("gold.servicos_ecossistemicos_trecho_ano não gravada: feature_store_ml_anual ainda vazia.")
+
     return {
         "serie_temporal_trecho_mes": serie,
         "feature_store_ml": features,
         "feature_store_ml_anual": features_anual,
         "estado_inicial_abm": estado_inicial,
         "sensoriamento_trecho_ano": sensoriamento_anual,
+        "servicos_ecossistemicos_trecho_ano": servicos_ecossistemicos,
     }
 
 

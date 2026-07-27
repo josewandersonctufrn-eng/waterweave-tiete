@@ -64,6 +64,25 @@ Sem essa variável definida, `era5_cmip6.py` levanta um erro claro — ver
 `models.abm.model` (ver ACHADO DE PESQUISA na docstring do módulo) — hoje é
 um conector funcional e testado, mas isolado do resto do pipeline.
 
+## Serviços ecossistêmicos, acoplamento ML↔biofísico e co-criação
+
+Itens 5-7 do roadmap de pesquisa WaterWeave-Water4All:
+
+- **Serviços ecossistêmicos** (`models/servicos_ecossistemicos.py`): regulação da qualidade da
+  água, provisão hídrica e suporte à biodiversidade, cada um em fração 0-1. Regulação e provisão
+  têm série histórica REAL (`gold.servicos_ecossistemicos_trecho_ano`); suporte à biodiversidade
+  só é computável no braço simulado do ABM (ver docstring do módulo para o porquê) — exibido na
+  página "Cenários Futuros".
+- **Acoplamento ML ↔ biofísico** (`models/ml/comparacao_biofisico_ml.py`): compara, passo a
+  passo, a previsão estatística (`models.ml.predict_iqa`) com a simulação determinística do
+  cenário "Atual" para o mesmo trecho — exibido no expander "Validação cruzada" da página
+  "Cenários Futuros". Ver docstring do módulo para a ressalva sobre âncoras de tempo diferentes
+  entre os dois modelos.
+- **Co-criação** (`models/abm/scenario_store.py`): stakeholders podem salvar uma configuração de
+  cenário como proposta nomeada (nome, autor, justificativa) e recarregar propostas salvas por
+  outros participantes — persistido em `data/cenarios_propostos/` (JSON, versionado). Seção
+  "Propostas da comunidade" na página "Cenários Futuros".
+
 ## Testes
 
 ```powershell
@@ -129,6 +148,7 @@ Tabelas produzidas:
 | Gold | `feature_store_ml_anual` | trecho × ano + lags/média móvel de IQA/OD — fonte de treino atual do ML |
 | Gold | `estado_inicial_abm` | snapshot mais recente por trecho |
 | Gold | `sensoriamento_trecho_ano` | trecho × ano (NDVI/turbidez/clorofila-a/temp. superfície/TSS/nível — ver ressalva de cobertura temporal na docstring de `transform.gold_features`) |
+| Gold | `servicos_ecossistemicos_trecho_ano` | trecho × ano (regulação da qualidade da água + provisão hídrica, fração 0-1 — ver `models.servicos_ecossistemicos`; suporte à biodiversidade só existe no braço simulado do ABM, não nesta tabela histórica) |
 
 ## Estrutura do projeto
 

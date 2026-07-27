@@ -39,6 +39,7 @@ from waterweave.models.abm.agents import (
     IndustriaAgent,
     PoderPublicoAgent,
 )
+from waterweave.transform.gold_features import FRACAO_VAZAO_CAPTACAO_NECESSARIA
 
 
 def _serie_trecho(trecho_id: str) -> pd.DataFrame:
@@ -113,7 +114,7 @@ class RioTieteModel(mesa.Model):
 
         self._climatologia = {t: _climatologia_mensal(t) for t in trechos}
         self._uso_solo = {t: _uso_solo_recente(t) for t in trechos}
-        self.captacao_necessaria_m3s = {t: 0.15 * _vazao_media_historica(t) for t in trechos}
+        self.captacao_necessaria_m3s = {t: FRACAO_VAZAO_CAPTACAO_NECESSARIA * _vazao_media_historica(t) for t in trechos}
 
         self.agentes_por_trecho: dict[str, dict[str, object]] = {}
         for trecho_id in trechos:

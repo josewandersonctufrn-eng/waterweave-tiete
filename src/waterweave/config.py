@@ -91,6 +91,17 @@ MESES_PT = {
 PIPELINE_CONTROL_FILE = PROJECT_ROOT / "data" / "_pipeline_runs.json"
 
 # ---------------------------------------------------------------------------
+# Co-criação com stakeholders (item 7 do roadmap de pesquisa WaterWeave-Water4All) —
+# ver models.abm.scenario_store
+# ---------------------------------------------------------------------------
+# Propostas de cenário salvas por gestores/tomadores de decisão/representantes de comunidades
+# na página "Cenários Futuros" (nome, autor, justificativa, parâmetros) — um arquivo JSON por
+# proposta. VERSIONADO (não é gitignored, ao contrário de `data/bronze/`): diferente de dado
+# reprocessável a partir da fonte bruta, uma proposta de stakeholder é conteúdo original que só
+# existe aqui — perder isso ao limpar `data/` apagaria contribuição real de co-criação.
+PROPOSTAS_DIR = PROJECT_ROOT / "data" / "cenarios_propostos"
+
+# ---------------------------------------------------------------------------
 # Google Earth Engine (uso do solo real — ingestion.connectors.mapbiomas)
 # ---------------------------------------------------------------------------
 # Projeto Google Cloud com a API do Earth Engine habilitada e registrada para

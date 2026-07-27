@@ -114,4 +114,8 @@ def rodar_cenario_customizado(
     ]
     tabela = pd.DataFrame(linhas)
     tabela["multas_acumuladas"] = tabela["trecho_id"].map(modelo.multas_por_trecho)
+    # Necessária para o serviço ecossistêmico de PROVISÃO HÍDRICA (`models.servicos_ecossistemicos`,
+    # item 5 do roadmap de pesquisa) — mesmo valor repetido em todas as linhas do trecho (não
+    # muda passo a passo, ver `RioTieteModel.captacao_necessaria_m3s`).
+    tabela["captacao_necessaria_m3s"] = tabela["trecho_id"].map(modelo.captacao_necessaria_m3s)
     return tabela
