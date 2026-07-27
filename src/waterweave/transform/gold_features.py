@@ -50,13 +50,22 @@ colunas destruiria o conjunto de treino inteiro (o mesmo erro que o item 6
 da auditoria de ML já corrigiu para vazão/chuva). Por isso esta tabela é
 gravada separada: serve para (a) já deixar pronta a mecânica de fusão de
 dado heterogêneo que a pesquisa precisa, e (b) uma leitura pontual "o que o
-satélite mostra agora", sem contaminar o treino. Quando uma fonte histórica
-real (Landsat 1984+/Sentinel-2 2015+ via Google Earth Engine — mesmo tipo de
-limitação de autenticação interativa documentada em
-`ingestion.connectors.mapbiomas`; ver stub de pesquisa em
-`ingestion.connectors.sensoriamento_historico`) substituir esta planilha
-ilustrativa, aí sim o merge com `feature_store_ml_anual` passa a fazer
-sentido, e os lags/SHAP ganham um driver de sensoriamento remoto real.
+satélite mostra agora", sem contaminar o treino.
+
+ATUALIZAÇÃO (2026-07, sensoriamento histórico REAL): `ingestion.connectors.sensoriamento_historico`
+(Landsat Collection 2 via Google Earth Engine, 1984-presente) deixou de ser stub — quando
+`bronze_sensoriamento_historico.run()` já foi executado, `silver.sensoriamento_historico` TEM
+39+ anos em comum com a série real da CETESB. `sensoriamento_real_com_fallback_ilustrativo`
+(abaixo) combina as duas fontes com prioridade para o dado real (mesmo padrão de
+`qualidade_real_com_fallback_simulado`), e `build_indicadores_sensoriamento_anual` passou a
+usar essa fusão em vez de ler `silver.sensoriamento` isolada. Mesmo assim, esta tabela
+CONTINUA fora de `feature_store_ml_anual` por enquanto — não por falta de sobreposição
+temporal (que agora existe), mas porque os índices espectrais (NDVI/proxy NDTI de
+turbidez/temperatura) nunca foram calibrados contra medição in situ do Tietê (ver RESSALVA em
+`ingestion.connectors.sensoriamento_historico`); usá-los como preditora de ML antes dessa
+validação arriscaria o mesmo tipo de "ruído estrutural disfarçado de sinal" que o item 5 da
+auditoria de ML já identificou para vazão do Baixo Tietê. Hoje `gold.sensoriamento_trecho_ano`
+alimenta o Mapa Interativo do dashboard (`webapp/pages/1_Mapa_Interativo.py`), não o ML.
 
 ACHADO DE PESQUISA (2026-07, uso do solo REAL como preditora de ML): diferente do
 sensoriamento remoto acima, `silver.uso_solo` (MapBiomas real, via
@@ -265,6 +274,10 @@ _PARAMETRO_SENSORIAMENTO_PARA_COLUNA = {
     "Temperatura da Superfície": "temperatura_superficie_c",
     "Sólidos Suspensos Totais": "solidos_suspensos_totais_mg_l_sensoriamento",
     "Nível da Água Altimetria": "nivel_agua_m",
+    # Landsat real (connectors.sensoriamento_historico) — NÃO é a mesma grandeza da "Turbidez"
+    # em NTU acima (essa vem da planilha ilustrativa/simulada): é um índice espectral (NDTI)
+    # nunca calibrado contra medição in situ, daí a coluna própria em vez de misturar as duas.
+    "Turbidez (proxy NDTI, não calibrado)": "turbidez_proxy_ndti_sensoriamento",
 }
 
 
@@ -278,15 +291,45 @@ def _normalizar_nome_parametro(parametro: str) -> str:
     return "_".join(filter(None, "".join(c if c.isalnum() else " " for c in sem_acento).lower().split()))
 
 
-def build_indicadores_sensoriamento_anual() -> pd.DataFrame:
-    """Agrega `silver.sensoriamento` (uma linha por ponto/data/parâmetro) para uma linha por
-    (trecho, ano) — ver ACHADO DE PESQUISA na docstring do módulo para o porquê desta tabela
-    ficar separada de `feature_store_ml_anual` por enquanto (zero anos em comum com o
-    histórico real de qualidade da água).
+def sensoriamento_real_com_fallback_ilustrativo() -> pd.DataFrame:
+    """Combina `silver.sensoriamento_historico` (real, Landsat 1984-presente) com
+    `silver.sensoriamento` (ilustrativa/simulada, planilha 2026) por (id_regiao, ano,
+    parametro) — mesmo padrão de `qualidade_real_com_fallback_simulado`: o dado real tem
+    prioridade, a planilha simulada só preenche onde não existe medição real (na prática, hoje
+    isso é sobretudo o próprio ano corrente, ainda sem imagem Landsat processada com qualidade
+    definitiva). Retorna `silver.sensoriamento` (ilustrativa) sem alteração se a Bronze real
+    ainda não foi materializada (`bronze_sensoriamento_historico.run()` nunca executado)."""
+    ilustrativo = read_table(SILVER_DIR / "sensoriamento")
+    real = read_table(SILVER_DIR / "sensoriamento_historico")
+    if real.empty:
+        return ilustrativo
 
-    Retorna DataFrame vazio se `silver.sensoriamento` ainda não foi materializada (mesmo
-    contrato de `io_delta.read_table` para tabela ausente)."""
-    sensoriamento = read_table(SILVER_DIR / "sensoriamento")
+    # `data_coleta` normalizada para datetime em AMBOS os lados antes do concat: a planilha
+    # ilustrativa volta de `read_table` como string (round-trip Excel -> Delta), enquanto o
+    # Landsat real já vem como Timestamp — sem normalizar aqui, o resultado combinado tem uma
+    # coluna de tipo misto (Timestamp e str) que quebra qualquer consumidor a jusante que
+    # espere `.dt`/`.year` direto (ver `webapp/pages/1_Mapa_Interativo.py`).
+    real = real.assign(data_coleta=pd.to_datetime(real["data_coleta"]))
+    ilustrativo = ilustrativo.assign(data_coleta=pd.to_datetime(ilustrativo["data_coleta"]))
+    real = real.assign(ano=real["data_coleta"].dt.year, _prioridade=0)
+    ilustrativo = ilustrativo.assign(ano=ilustrativo["data_coleta"].dt.year, _prioridade=1)
+
+    combinado = pd.concat([real, ilustrativo], ignore_index=True)
+    combinado = combinado.sort_values(["id_regiao", "ano", "parametro", "_prioridade"])
+    combinado = combinado.drop_duplicates(subset=["id_regiao", "ano", "parametro"], keep="first")
+    return combinado.drop(columns=["ano", "_prioridade"]).reset_index(drop=True)
+
+
+def build_indicadores_sensoriamento_anual() -> pd.DataFrame:
+    """Agrega o sensoriamento remoto (real com fallback ilustrativo, ver
+    `sensoriamento_real_com_fallback_ilustrativo`) para uma linha por (trecho, ano) — ver
+    ATUALIZAÇÃO na docstring do módulo para o porquê desta tabela ficar separada de
+    `feature_store_ml_anual` por enquanto (índices espectrais ainda não calibrados, não falta
+    de sobreposição temporal).
+
+    Retorna DataFrame vazio se nem a fonte real nem a ilustrativa foram materializadas ainda
+    (mesmo contrato de `io_delta.read_table` para tabela ausente)."""
+    sensoriamento = sensoriamento_real_com_fallback_ilustrativo()
     if sensoriamento.empty:
         return sensoriamento
 
@@ -315,7 +358,17 @@ def build_indicadores_sensoriamento_anual() -> pd.DataFrame:
     contagem = (
         tabela.groupby(["trecho_id", "ano"]).size().rename("n_observacoes_sensoriamento").reset_index()
     )
-    return agregado.merge(contagem, on=["trecho_id", "ano"], how="left")
+    # "observado" só se TODAS as observações do (trecho, ano) vieram do Landsat real —
+    # transparência para o Mapa Interativo distinguir o que é medição real do que ainda é
+    # preenchido pela planilha ilustrativa (ver `sensoriamento_real_com_fallback_ilustrativo`).
+    fonte = (
+        tabela.groupby(["trecho_id", "ano"])["fonte_tipo"]
+        .apply(lambda s: s.iloc[0] if s.nunique() == 1 else "misto")
+        .rename("sensoriamento_fonte_tipo")
+        .reset_index()
+    )
+    resultado = agregado.merge(contagem, on=["trecho_id", "ano"], how="left")
+    return resultado.merge(fonte, on=["trecho_id", "ano"], how="left")
 
 
 def build_servicos_ecossistemicos_historico(features_anual: pd.DataFrame) -> pd.DataFrame:

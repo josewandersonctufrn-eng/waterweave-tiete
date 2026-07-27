@@ -44,6 +44,20 @@ anual completa, ver `ingestion.connectors.mapbiomas`), e sim por
 `bronze_cetesb`. `silver_uso_solo` fecha a Silver correspondente. Nenhum dos
 dois está plugado em `gold_features`/`models.ml` ainda — é a próxima decisão,
 não feita aqui.
+
+ATUALIZAÇÃO (2026-07, sensoriamento remoto histórico REAL): mesmo padrão de
+`bronze_uso_solo` acima — `ingestion.bronze_sensoriamento_historico` busca a série real
+(Landsat Collection 2 via Earth Engine, 1984-presente) e entra em
+`run_bronze_static_sources`/`run_silver_gold_refresh` ao lado (não substitui)
+`bronze_sensoriamento`/`silver_sensoriamento` (a planilha ilustrativa) — a fusão com
+prioridade para o dado real acontece em
+`transform.gold_features.sensoriamento_real_com_fallback_ilustrativo`. RESSALVA DE
+PERFORMANCE: esta busca é sensivelmente mais lenta que `bronze_uso_solo` (uma chamada
+`getInfo()` do Earth Engine por ponto de monitoramento, sobre décadas de imagens Landsat) —
+minutos, não segundos, por rodada completa. Aceito por ora pelo mesmo motivo que
+`bronze_uso_solo` (rescan completo, sem incremental) foi aceito: simplicidade sobre uma
+otimização prematura, reavaliar se o tempo de execução do job mensal se tornar um problema
+real.
 """
 from __future__ import annotations
 
@@ -60,6 +74,7 @@ from waterweave.ingestion import (
     bronze_estacoes,
     bronze_qualidade_solo,
     bronze_sensoriamento,
+    bronze_sensoriamento_historico,
     bronze_uso_solo,
 )
 from waterweave.ingestion.connectors import ana_snirh, cetesb
@@ -70,6 +85,7 @@ from waterweave.transform import (
     silver_qualidade,
     silver_qualidade_cetesb,
     silver_sensoriamento,
+    silver_sensoriamento_historico,
     silver_uso_solo,
 )
 
@@ -109,6 +125,7 @@ def run_bronze_static_sources() -> None:
     bronze_cetesb.run()
     bronze_qualidade_solo.run()
     bronze_sensoriamento.run()
+    bronze_sensoriamento_historico.run()
     bronze_uso_solo.run()
 
 
@@ -139,6 +156,7 @@ def run_silver_gold_refresh() -> None:
     silver_qualidade.build_silver_qualidade()
     silver_qualidade_cetesb.build_silver_qualidade_cetesb()
     silver_sensoriamento.build_silver_sensoriamento()
+    silver_sensoriamento_historico.build_silver_sensoriamento_historico()
     silver_uso_solo.build_silver_uso_solo()
     gold_features.run()
 

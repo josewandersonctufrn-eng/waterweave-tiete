@@ -35,7 +35,7 @@ _FONTE_PARA_MODULO_BRONZE = {
 # declará-la. Precisam estar aqui para não quebrar o teste de contagem abaixo — mas TAMBÉM
 # precisam continuar sendo chamados em `run_bronze_static_sources` (ver
 # `test_todo_modulo_extra_bronze_e_realmente_executado`).
-_MODULOS_BRONZE_SEM_RAW_SOURCE = {"bronze_uso_solo"}
+_MODULOS_BRONZE_SEM_RAW_SOURCE = {"bronze_uso_solo", "bronze_sensoriamento_historico"}
 
 
 def test_toda_fonte_declarada_tem_modulo_bronze_mapeado():

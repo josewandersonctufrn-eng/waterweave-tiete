@@ -14,7 +14,10 @@ import streamlit as st
 
 from waterweave.config import GOLD_DIR, SILVER_DIR
 from waterweave.io_delta import read_table
-from waterweave.transform.gold_features import qualidade_real_com_fallback_simulado
+from waterweave.transform.gold_features import (
+    qualidade_real_com_fallback_simulado,
+    sensoriamento_real_com_fallback_ilustrativo,
+)
 
 
 @st.cache_data(ttl=3600)
@@ -36,11 +39,13 @@ def load_qualidade_historica() -> pd.DataFrame:
 
 @st.cache_data(ttl=3600)
 def load_sensoriamento() -> pd.DataFrame:
-    """Pontos de sensoriamento remoto, nascente -> foz (`silver.sensoriamento`).
-
-    ⚠️ Fonte descrita como "Simulação Consolidada" para o período coberto.
+    """Pontos de sensoriamento remoto, nascente -> foz — real (Landsat, `silver.sensoriamento_historico`)
+    com fallback para a planilha ilustrativa (`silver.sensoriamento`) onde não há cobertura real
+    ainda, priorizando sempre o dado real por (ponto, ano, parâmetro). Ver
+    `transform.gold_features.sensoriamento_real_com_fallback_ilustrativo` — a coluna
+    `fonte_tipo` retornada aqui identifica a origem linha a linha ("observado"/"simulado").
     """
-    return read_table(SILVER_DIR / "sensoriamento")
+    return sensoriamento_real_com_fallback_ilustrativo()
 
 
 @st.cache_data(ttl=3600)
