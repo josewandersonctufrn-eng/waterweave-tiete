@@ -62,19 +62,30 @@ $env:WATERWEAVE_CDS_API_KEY = "seu-token-pessoal"
 Sem essa variável definida, `era5_cmip6.py` levanta um erro claro — ver
 `config.CDS_API_KEY`.
 
-**Calibrar `fator_clima` do cenário "Mudança Climática Extrema" com CMIP6 real**: por padrão
-esse cenário usa um proxy fixo (chuva -25%). Para calibrá-lo com a projeção CMIP6 real
-(SSP5-8.5, comparada ao período de referência 1995-2014), com `WATERWEAVE_CDS_API_KEY`
-configurado:
+**Calibrar `fator_clima` do cenário "Mudança Climática Extrema" com CMIP6 real**: já foi
+executado contra a CDS de verdade (2026-07) — `data/fator_clima_cmip6.json` está versionado no
+repositório com o resultado real: `fator_clima = 0.982` (baseline `historical` 1995-2014 vs.
+projeção `SSP5-8.5` 2040-2060, modelo `mpi_esm1_2_lr`), bem menos severo que o proxy fixo de
+-25% (`fator_clima = 0.75`) usado antes da calibração. `models.abm.scenarios` já lê esse arquivo
+automaticamente na importação (`models.abm.clima_real`, sem precisar de rede) — nenhuma ação
+extra é necessária para usar o valor calibrado.
+
+A primeira execução real revelou que o formato de resposta da CDS diverge do assumido na
+pesquisa original (ver ACHADO na docstring de `era5_cmip6.py`): `t2m`/`tp` do ERA5 vêm em
+arquivos NetCDF separados dentro do zip; o id do experimento CMIP6 precisa de underscores
+(`ssp5_8_5`, não `ssp585`); e pedir temperatura+precipitação na mesma requisição CMIP6 faz a CDS
+descartar a precipitação em silêncio. Corrigido e revalidado com dado real.
+
+Para recalibrar (outro horizonte, outro modelo CMIP6, ou depois que a CDS mudar de novo), com
+`WATERWEAVE_CDS_API_KEY` configurado:
 
 ```powershell
 python -m waterweave.ingestion.connectors.era5_cmip6
 ```
 
-Isso grava `data/fator_clima_cmip6.json` (versionado no repositório) — `models.abm.scenarios`
-passa a ler esse arquivo automaticamente na próxima vez que for importado (`models.abm.clima_real`,
-sem precisar de rede). Sem o arquivo, cai de volta no proxy fixo — nunca quebra a aplicação por
-falta de calibração.
+Isso sobrescreve `data/fator_clima_cmip6.json`. Sem o arquivo (checkout novo, antes da primeira
+calibração), `models.abm.scenarios` cai de volta no proxy fixo de -25% — nunca quebra a aplicação
+por falta de calibração.
 
 ## Serviços ecossistêmicos, acoplamento ML↔biofísico e co-criação
 
