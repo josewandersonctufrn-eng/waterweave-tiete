@@ -138,9 +138,9 @@ Fontes brutas já presentes no projeto e mapeadas em `src/waterweave/config.py`:
 | Chuva (DAEE) | `ALTO\|MEDIO\|BAIXO TIETE_PLUV/` | observado | matriz Ano x Mês por posto, + variante "consolidado" |
 | **Vazão/chuva (ANA/SNIRH)** | API pública `telemetriaws1.ana.gov.br` | observado | **conector real** (`connectors/ana_snirh.py`) — sem chave; +1.762 linhas de vazão / +6.355 de chuva já incorporadas ao Bronze |
 | Estações | `cod_latlong.xlsx` | observado | 699 estações estaduais; Silver filtra as 32 sobre o eixo do Tietê |
-| Pontos consolidados | `base_de_dados_pontos.xlsx` | observado | base agregada (147MB) — ainda não ingerida, ver "Próximos passos" |
-| Qualidade da água/solo | `Planilha_Historica_Solo_Sedimentos_Rio_Tiete_1940_2025.xlsx` | **simulado** | proxy histórico baseado em tendências CETESB/DAEE/SOS Mata Atlântica |
-| Sensoriamento remoto | `Sensoriamento_Remoto_Rio_Tiete.xlsx` | **simulado** | placeholder para INPE/ESA/USGS/ANA reais |
+| **Pontos consolidados (CETESB)** | `base_de_dados_pontos.xlsx` | observado | base agregada (147MB, 699 pontos, ~2,4M medições 1978-2024) — ingerida por `bronze_cetesb`; incremental pós-2024 sem rota de API, ver "Conector CETESB — decisão formalizada" |
+| Qualidade da água/solo | `Planilha_Historica_Solo_Sedimentos_Rio_Tiete_1940_2025.xlsx` | **simulado** | proxy histórico baseado em tendências CETESB/DAEE/SOS Mata Atlântica — fallback quando não há medição CETESB real no trecho/ano (ver `qualidade_real_com_fallback_simulado`) |
+| Sensoriamento remoto | `Sensoriamento_Remoto_Rio_Tiete.xlsx` | **simulado** | planilha ilustrativa; fundida com série real (Landsat via Earth Engine, `bronze_sensoriamento_historico`) com prioridade para o dado real, ver `sensoriamento_real_com_fallback_ilustrativo` |
 
 `_fonte_tipo` (`observado`/`simulado`) é propagado de Bronze até Gold para que
 o dashboard e os modelos nunca tratem dado sintético como observação de
