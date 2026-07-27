@@ -25,6 +25,11 @@ Implementação real, quando priorizada, seguiria o mesmo padrão dos módulos
 manualmente (ou via automação de navegador, já que é um portal server-side)
 e escrever um parser dedicado — não uma chamada de API parametrizada como
 esta função sugere. Mantido como `NotImplementedError` até essa decisão.
+
+Decisão formalizada (contexto/decisão/consequência/gatilho para revisitar)
+em README.md, seção "Conector CETESB — decisão formalizada". Guardas de
+regressão em `tests/test_cetesb_connector.py`: a mensagem desta exceção e o
+skip gracioso de `ingestion.monthly_job.run_live_connectors`.
 """
 from __future__ import annotations
 

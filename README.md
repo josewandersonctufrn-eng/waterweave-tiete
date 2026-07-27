@@ -240,22 +240,51 @@ aceitar qualquer estação, não só a lógica de longitude por trecho. Backfill
 real de 2000 a 2026 já rodou: **+1.762 linhas de vazão, +6.355 de chuva**,
 zero fora do bounding box (verificado).
 
-CETESB e MapBiomas foram pesquisados (não deixados como suposição
-genérica) e documentados nos próprios módulos: CETESB não tem API pública
-estruturada (só portal de download); MapBiomas tem uma rota sem Earth
-Engine (planilha nacional por município via Google Drive, não testada
-ponta a ponta por tempo) e uma rota com Earth Engine (exige
-`earthengine authenticate` do usuário, não executável em sessão não
-interativa). Ambos seguem `NotImplementedError` com o caminho de
-implementação documentado.
+MapBiomas foi pesquisado (não deixado como suposição genérica) e tinha duas
+rotas possíveis: uma sem Earth Engine (planilha nacional por município via
+Google Drive) e uma com Earth Engine. A rota com Earth Engine está resolvida
+de verdade (ver `ATUALIZAÇÃO` em `ingestion/monthly_job.py`): com
+`earthengine authenticate` feito pelo usuário, `ingestion.bronze_uso_solo`
+busca uso do solo real (MapBiomas Coleção 9, 1985-2023). A rota sem Earth
+Engine nunca foi implementada — ficou obsoleta assim que a com Earth Engine
+funcionou, não é mais um próximo passo.
+
+## Conector CETESB — decisão formalizada
+
+**Contexto.** `RAW_SOURCES["pontos_consolidados"]` (`base_de_dados_pontos.xlsx`)
+é um export local da rede estadual de qualidade da água da CETESB — 699
+pontos em todo o Estado de SP, ~2,4 milhões de medições, 1978-2024. Esse
+histórico **já está resolvido**: `ingestion.bronze_cetesb` lê o arquivo (as
+3 abas por período) e grava o mirror completo em Bronze;
+`transform.silver_qualidade_cetesb` faz o filtro para o eixo do Tietê, a
+pivotagem EAV→colunas e o tratamento de censura analítica (coluna `Sinal`).
+O que falta é só a parte INCREMENTAL: boletins publicados depois do fim
+desse export (hoje, 2024), nas rodadas mensais seguintes.
+
+**Decisão.** `connectors/cetesb.fetch_new_records` permanece
+`NotImplementedError`, deliberadamente — não é uma lacuna esquecida. CETESB
+foi pesquisada em 2026-07 (não deixada como suposição genérica): o "Catálogo
+de Dados Abertos" e o INFOÁGUAS são públicos, mas expõem só
+visualização/download de planilhas via portal web (IBM WebSphere Portal),
+não uma rota HTTP parametrizável como a `HidroSerieHistorica` da ANA. Não há
+hoje uma forma de buscar "boletins desde `X`" programaticamente.
+
+**Consequência.** O job mensal (`monthly_job.run_live_connectors`) trata
+esse `NotImplementedError` como esperado — loga em nível INFO e segue sem
+derrubar a rodada (ver `tests/test_cetesb_connector.py`, que trava as duas
+metades desta decisão: a mensagem de erro e o skip gracioso). Na prática,
+isso significa que a qualidade de água CETESB no pipeline vai ficando
+defasada em relação a 2024 até uma decisão de implementação real ser
+tomada.
+
+**Gatilho para revisitar.** Se a CETESB publicar uma API REST documentada,
+ou se uma automação de navegador contra o INFOÁGUAS (mesmo padrão dos
+módulos `bronze_daee_*`, mas server-side) for priorizada, o parser dedicado
+substitui este stub — ver docstring de `connectors/cetesb.py` para o
+caminho de implementação já mapeado.
 
 ## Próximos passos
 
-- **CETESB/MapBiomas**: ver docstrings dos respectivos módulos em
-  `ingestion/connectors/` para o caminho de implementação já pesquisado.
-- **`base_de_dados_pontos.xlsx`**: ainda não tem um `bronze_*` dedicado —
-  inspecionar seu schema antes de decidir se substitui ou complementa
-  `cod_latlong.xlsx`.
 - **Encadeamento entre trechos**: o Alto deságua no Médio, que deságua no
   Baixo — hoje cada trecho é simulado isoladamente no ABM; propagar
   vazão/carga de montante para jusante é a extensão mais natural.
