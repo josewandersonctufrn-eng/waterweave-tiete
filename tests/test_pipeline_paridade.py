@@ -28,6 +28,15 @@ _FONTE_PARA_MODULO_BRONZE = {
     "sensoriamento_remoto": "bronze_sensoriamento",
 }
 
+# Módulos Bronze que existem em `run_bronze_static_sources` mas NÃO correspondem a uma chave
+# de `RAW_SOURCES` — porque a fonte não é um arquivo local (é uma coleção do Google Earth
+# Engine, ver `ingestion.connectors.mapbiomas`), então `RAW_SOURCES` (que só mapeia
+# pastas/arquivos já em disco, ver docstring de `config.py`) não é o lugar certo para
+# declará-la. Precisam estar aqui para não quebrar o teste de contagem abaixo — mas TAMBÉM
+# precisam continuar sendo chamados em `run_bronze_static_sources` (ver
+# `test_todo_modulo_extra_bronze_e_realmente_executado`).
+_MODULOS_BRONZE_SEM_RAW_SOURCE = {"bronze_uso_solo"}
+
 
 def test_toda_fonte_declarada_tem_modulo_bronze_mapeado():
     """Toda chave de `RAW_SOURCES` precisa aparecer em `_FONTE_PARA_MODULO_BRONZE` — se uma
@@ -70,12 +79,27 @@ def test_todo_modulo_bronze_mapeado_e_realmente_executado():
     )
 
 
+def test_todo_modulo_extra_bronze_e_realmente_executado():
+    """Espelha `test_todo_modulo_bronze_mapeado_e_realmente_executado`, mas para os módulos
+    Bronze de fonte não-local (`_MODULOS_BRONZE_SEM_RAW_SOURCE`) — sem isso, seria fácil
+    adicionar um módulo a essa lista "para não quebrar a contagem" sem de fato chamá-lo."""
+    chamados = set(_modulos_run_chamados(monthly_job.run_bronze_static_sources))
+    nao_executados = [m for m in _MODULOS_BRONZE_SEM_RAW_SOURCE if m not in chamados]
+    assert not nao_executados, (
+        f"Módulo(s) em _MODULOS_BRONZE_SEM_RAW_SOURCE mas NÃO chamado(s) dentro de "
+        f"monthly_job.run_bronze_static_sources: {nao_executados}"
+    )
+
+
 def test_run_bronze_static_sources_nao_tem_chamada_duplicada_ou_a_mais():
     """Sanidade adicional: o número de chamadas `.run()` reais (via AST) dentro da função deve
-    bater exatamente com o número de fontes mapeadas — pega duplicação ou chamada residual de
-    um módulo já removido de `_FONTE_PARA_MODULO_BRONZE`."""
+    bater exatamente com o total de fontes mapeadas (RAW_SOURCES + extras sem fonte local) —
+    pega duplicação ou chamada residual de um módulo já removido de `_FONTE_PARA_MODULO_BRONZE`
+    ou de `_MODULOS_BRONZE_SEM_RAW_SOURCE`."""
     chamados = _modulos_run_chamados(monthly_job.run_bronze_static_sources)
-    assert len(chamados) == len(_FONTE_PARA_MODULO_BRONZE), (
-        f"Esperava {len(_FONTE_PARA_MODULO_BRONZE)} chamadas .run() em "
-        f"run_bronze_static_sources (uma por fonte mapeada), encontrei {len(chamados)}: {chamados}."
+    esperado = len(_FONTE_PARA_MODULO_BRONZE) + len(_MODULOS_BRONZE_SEM_RAW_SOURCE)
+    assert len(chamados) == esperado, (
+        f"Esperava {esperado} chamadas .run() em run_bronze_static_sources "
+        f"({len(_FONTE_PARA_MODULO_BRONZE)} de RAW_SOURCES + {len(_MODULOS_BRONZE_SEM_RAW_SOURCE)} extra(s)), "
+        f"encontrei {len(chamados)}: {chamados}."
     )

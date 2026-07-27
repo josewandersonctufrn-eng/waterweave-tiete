@@ -24,6 +24,25 @@ python -m waterweave.models.ml.train
 streamlit run src/waterweave/webapp/streamlit_app.py
 ```
 
+## Uso do solo real (MapBiomas / Google Earth Engine)
+
+`ingestion/bronze_uso_solo.py` busca uso do solo real (MapBiomas Coleção 9,
+1985-2023) via Google Earth Engine. Requer, uma única vez por máquina:
+
+```powershell
+pip install earthengine-api   # não está em requirements.txt (ver comentário lá — build do Streamlit Cloud fica enxuto)
+earthengine authenticate       # fluxo OAuth interativo, abre o navegador
+```
+
+E, a cada sessão de terminal onde for rodar a ingestão:
+
+```powershell
+$env:WATERWEAVE_EE_PROJECT = "seu-project-id"   # ID de um projeto Google Cloud com a API do Earth Engine habilitada
+```
+
+Sem essa variável definida, `bronze_uso_solo.py` levanta um erro claro (não
+o erro genérico do Earth Engine) — ver `config.EARTH_ENGINE_PROJECT`.
+
 ## Testes
 
 ```powershell
@@ -85,8 +104,10 @@ Tabelas produzidas:
 | Silver | `qualidade` | trecho × ano |
 | Silver | `sensoriamento` | ponto × data de coleta |
 | Gold | `serie_temporal_trecho_mes` | trecho × mês (vazão/chuva médias + qualidade do ano) |
-| Gold | `feature_store_ml` | igual acima + lags/média móvel de IQA/OD |
+| Gold | `feature_store_ml` | igual acima + lags/média móvel de IQA/OD (legado, mensal) |
+| Gold | `feature_store_ml_anual` | trecho × ano + lags/média móvel de IQA/OD — fonte de treino atual do ML |
 | Gold | `estado_inicial_abm` | snapshot mais recente por trecho |
+| Gold | `sensoriamento_trecho_ano` | trecho × ano (NDVI/turbidez/clorofila-a/temp. superfície/TSS/nível — ver ressalva de cobertura temporal na docstring de `transform.gold_features`) |
 
 ## Estrutura do projeto
 

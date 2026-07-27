@@ -6,3 +6,9 @@
 -r requirements.txt
 
 pytest>=8.0
+
+# ingestion/connectors/mapbiomas.py importa `ee` no nível do módulo — precisa estar instalado
+# para os testes (test_mapbiomas.py, test_bronze_uso_solo.py) sequer COLETAREM, mesmo eles
+# mockando toda chamada de rede/autenticação real (ver docstring desses arquivos). Não precisa
+# de `earthengine authenticate` em CI — os testes nunca chamam `ee.Initialize` de verdade.
+earthengine-api>=1.1

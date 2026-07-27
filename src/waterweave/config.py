@@ -6,6 +6,7 @@ pelo restante do pipeline.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -88,3 +89,25 @@ MESES_PT = {
 # ---------------------------------------------------------------------------
 
 PIPELINE_CONTROL_FILE = PROJECT_ROOT / "data" / "_pipeline_runs.json"
+
+# ---------------------------------------------------------------------------
+# Google Earth Engine (uso do solo real — ingestion.connectors.mapbiomas)
+# ---------------------------------------------------------------------------
+# Projeto Google Cloud com a API do Earth Engine habilitada e registrada para
+# uso não-comercial/acadêmico (ver docstring de connectors.mapbiomas). Exigido
+# por `ee.Initialize(project=...)` desde que o Earth Engine passou a recusar
+# inicialização sem projeto explícito.
+#
+# Lido de variável de ambiente, não hardcoded: não é uma credencial (sozinho
+# não dá acesso a nada — ainda precisa do token OAuth de `earthengine
+# authenticate`, que fica fora do repositório, em `~/.config/earthengine/`),
+# mas é um identificador específico da conta Google do usuário, então não faz
+# sentido fixo no código de um repositório público. Configure antes de rodar
+# `bronze_uso_solo.py` (ver README):
+#   PowerShell:  $env:WATERWEAVE_EE_PROJECT = "seu-project-id"
+#   bash:        export WATERWEAVE_EE_PROJECT=seu-project-id
+#
+# Fica `None` se a variável não estiver definida — `connectors.mapbiomas`
+# levanta um erro claro nesse caso (ver `fetch_uso_solo_por_trecho`), em vez
+# do erro genérico do Earth Engine sobre projeto ausente.
+EARTH_ENGINE_PROJECT = os.environ.get("WATERWEAVE_EE_PROJECT")

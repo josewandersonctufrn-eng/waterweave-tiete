@@ -8,17 +8,17 @@ Ordem de execução:
      `schema_mode="overwrite"` (ver `io_delta.write_table`). `bronze_cetesb`
      é o maior volume dessa lista (~2,4M linhas) mas ainda cabe no rescan
      completo em uma única máquina — reavaliar para incremental se isso
-     mudar.
+     mudar. `bronze_uso_solo` (MapBiomas via Earth Engine, ver item abaixo)
+     entra DEPOIS de `bronze_estacoes` porque depende das coordenadas reais
+     das estações já estarem em `bronze.estacoes`.
   2. Conectores ao vivo. `ana_snirh` é real (API pública HidroWeb da ANA,
      sem chave) e seu resultado é anexado (`mode="append"`) direto nas
      tabelas Bronze de fluviometria/pluviometria, no mesmo schema
      "consolidado" que os arquivos DAEE já usam — ver
      `connectors.ana_snirh`. `cetesb` (aqui, o conector — não confundir com
      `ingestion.bronze_cetesb`, que já cobre o histórico 1978-2024 via
-     export local) e `mapbiomas` seguem como `NotImplementedError` (a
-     primeira não tem API pública documentada para os boletins
-     PÓS-2024, a segunda depende de autenticação Google Earth Engine do
-     usuário — ver docstrings de cada uma) e são puladas com aviso, sem
+     export local) segue como `NotImplementedError` (sem API pública
+     documentada para os boletins PÓS-2024) e é pulado com aviso, sem
      derrubar o job.
   3. Silver e Gold são sempre recomputados por inteiro a partir da Bronze
      (custo baixo no volume atual de dados; trocar por reprocessamento
@@ -33,6 +33,17 @@ CETESB ficaram tecnicamente "configuradas" e nunca lidas. Ver
 `tests/test_pipeline_paridade.py` para o teste de guarda que agora impede
 essa classe específica de regressão (uma fonte declarada em `RAW_SOURCES`
 sem ingestão Bronze correspondente).
+
+ATUALIZAÇÃO (2026-07): `mapbiomas` deixou de ser um conector-stub. Com
+`earthengine authenticate` feito pelo usuário e `config.EARTH_ENGINE_PROJECT`
+registrado, `ingestion.bronze_uso_solo` agora busca uso do solo REAL
+(MapBiomas Coleção 9, 1985-2023) — não passa mais por `run_live_connectors`
+(o contrato `fetch_new_records(since)` nunca fez sentido para uma coleção
+anual completa, ver `ingestion.connectors.mapbiomas`), e sim por
+`run_bronze_static_sources`, no mesmo padrão de rescan completo de
+`bronze_cetesb`. `silver_uso_solo` fecha a Silver correspondente. Nenhum dos
+dois está plugado em `gold_features`/`models.ml` ainda — é a próxima decisão,
+não feita aqui.
 """
 from __future__ import annotations
 
@@ -49,8 +60,9 @@ from waterweave.ingestion import (
     bronze_estacoes,
     bronze_qualidade_solo,
     bronze_sensoriamento,
+    bronze_uso_solo,
 )
-from waterweave.ingestion.connectors import ana_snirh, cetesb, mapbiomas
+from waterweave.ingestion.connectors import ana_snirh, cetesb
 from waterweave.transform import (
     gold_features,
     silver_estacoes,
@@ -58,6 +70,7 @@ from waterweave.transform import (
     silver_qualidade,
     silver_qualidade_cetesb,
     silver_sensoriamento,
+    silver_uso_solo,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,9 +80,10 @@ logger = logging.getLogger(__name__)
 # separadamente quando a modelagem climática precisar de cenários (ver `models.abm.scenarios`).
 # ana_snirh também não entra: seu retorno (dict de DataFrames) é tratado à parte
 # em `run_live_connectors`, gravado direto nas tabelas Bronze correspondentes.
+# mapbiomas também não entra mais (ver ATUALIZAÇÃO 2026-07 acima): agora é
+# `ingestion.bronze_uso_solo`, chamado em `run_bronze_static_sources`.
 _CONECTORES_STUB = {
     "cetesb": cetesb,
-    "mapbiomas": mapbiomas,
 }
 
 
@@ -95,6 +109,7 @@ def run_bronze_static_sources() -> None:
     bronze_cetesb.run()
     bronze_qualidade_solo.run()
     bronze_sensoriamento.run()
+    bronze_uso_solo.run()
 
 
 def run_live_connectors(since: date) -> None:
@@ -124,6 +139,7 @@ def run_silver_gold_refresh() -> None:
     silver_qualidade.build_silver_qualidade()
     silver_qualidade_cetesb.build_silver_qualidade_cetesb()
     silver_sensoriamento.build_silver_sensoriamento()
+    silver_uso_solo.build_silver_uso_solo()
     gold_features.run()
 
 
