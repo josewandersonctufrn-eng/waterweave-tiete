@@ -26,3 +26,12 @@ venv/
 # Logs e artefatos locais
 streamlit_log.txt
 *.log
+
+# Editor local (configuração pessoal, não do projeto)
+.vscode/
+
+# Scratch de análise ad-hoc (pickles/figuras/scripts intermediários de EDA/relatórios já
+# consolidados em docs/) e arquivos de bloqueio temporário do Word/LibreOffice — nunca são
+# entrada de nada versionado, não deveriam ir para o repositório.
+_analise_tmp/
+~$*.doc*

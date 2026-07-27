@@ -1,0 +1,290 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage[most]{tcolorbox}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{parskip}
+\usepackage{titling}
+\usepackage{xcolor}
+
+\definecolor{riverblue}{RGB}{0,90,156}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=riverblue,
+    urlcolor=riverblue,
+    citecolor=riverblue,
+    pdftitle={WaterWeave-Tietê -- Relatório Técnico do Desenvolvimento},
+    pdfauthor={WaterWeave-Tietê}
+}
+
+\newtcolorbox{calloutbox}{
+    colback=riverblue!6,
+    colframe=riverblue,
+    boxrule=0.6pt,
+    arc=2pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+
+\setlist[itemize]{leftmargin=1.5em, itemsep=2pt, topsep=4pt}
+\setlist[description]{leftmargin=0em, itemsep=4pt, topsep=4pt, style=nextline}
+
+\title{\textbf{WaterWeave-Tietê}\\[0.3em]
+\large Relatório Técnico do Desenvolvimento\\[0.3em]
+\normalsize Plataforma Integrada para Gestão Sustentável dos Recursos Hídricos do Rio Tietê}
+\author{}
+\date{Julho de 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\clearpage
+
+\tableofcontents
+\clearpage
+
+
+\section{Resumo Executivo}
+
+O WaterWeave-Tietê é uma ferramenta digital criada para ajudar a entender, acompanhar e simular a saúde do Rio Tietê, desde sua nascente em Salesópolis (SP) até sua foz no Rio Paraná. Ela reúne, em um único lugar, dados históricos reais (desde 1940), modelos matemáticos que simulam o comportamento do rio, e um painel visual interativo que qualquer pessoa pode acessar pela internet, de qualquer computador, tablet ou celular.
+
+O projeto foi construído em cinco módulos independentes, que se conectam como peças de um quebra-cabeça. Cada módulo foi desenvolvido, testado com dados reais e documentado separadamente, para que o sistema possa crescer e ser melhorado aos poucos, sem precisar refazer o que já funciona.
+
+\begin{calloutbox}
+\textbf{Em uma frase:}\\
+Uma plataforma que baixa dados reais do rio, usa modelos científicos para simular seu comportamento sob diferentes decisões de gestão, e mostra tudo isso em um painel visual acessível pela internet.
+\end{calloutbox}
+
+Os cinco módulos desenvolvidos foram:
+
+\begin{itemize}
+\item Módulo 1 — Pipeline de Ingestão de Dados: busca, organiza e limpa os dados brutos do rio.
+\item Módulo 2 — Modelagem Híbrida: simula o comportamento do rio combinando três abordagens científicas diferentes.
+\item Módulo 3 — Dashboard Web: transforma os dados e simulações em mapas, gráficos e relatórios visuais.
+\item Módulo 4 — Publicação Online: coloca a ferramenta disponível na internet, para acesso de qualquer lugar.
+\item Módulo 5 — Identidade Visual: refina a aparência da ferramenta para um padrão profissional.
+\end{itemize}
+
+\section{Visão Geral da Arquitetura}
+
+Pense na plataforma como uma linha de produção industrial, onde a matéria-prima entra em um lado e um produto acabado sai do outro. Aqui, a “matéria-prima” são planilhas e arquivos com medições reais do rio (vazão, chuva, qualidade da água); o “produto acabado” é um painel visual interativo que qualquer pessoa entende.
+
+O caminho que o dado percorre tem três grandes etapas:
+
+\begin{itemize}
+\item Ingestão de Dados — busca os dados brutos (planilhas, APIs de agências governamentais) e os organiza.
+\item Modelagem Híbrida — usa esses dados organizados para simular cenários futuros do rio.
+\item Dashboard Web — apresenta tudo isso de forma visual, em mapas, gráficos e textos explicativos.
+\end{itemize}
+
+Essas três etapas foram construídas de forma modular: cada uma pode ser atualizada ou melhorada separadamente, sem quebrar as outras — da mesma forma que se pode trocar um pneu de um carro sem precisar desmontar o motor.
+
+\section{Módulo 1 — Pipeline de Ingestão de Dados}
+
+\subsection{O que este módulo faz}
+
+Este módulo é responsável por buscar os dados brutos sobre o Rio Tietê, organizá-los e prepará-los para uso nos módulos seguintes. Os dados vinham originalmente de planilhas do governo (DAEE — Departamento de Águas e Energia Elétrica de SP) e, ao longo do desenvolvimento, passaram a incluir também dados reais buscados diretamente de uma API pública da ANA (Agência Nacional de Águas), sem necessidade de senha ou cadastro.
+
+\subsection{As três camadas de organização dos dados}
+
+Os dados passam por três camadas de ``limpeza e organização'', uma técnica bastante usada na indústria de dados chamada arquitetura Medallion:
+
+\begin{center}
+\begin{longtable}{p{2.8cm}p{4.2cm}p{7.5cm}}
+\toprule
+\textbf{Camada} & \textbf{Analogia} & \textbf{O que acontece} \\
+\midrule
+\endhead
+Bronze & Ingredientes crus, direto do mercado & Os dados são copiados exatamente como vieram da fonte original, sem alterações. \\
+Silver & Ingredientes lavados, cortados e organizados & Os dados são limpos, corrigidos e padronizados (ex.: converter coordenadas, juntar duplicatas). \\
+Gold & Prato pronto para servir & Os dados são agregados e resumidos por trecho do rio e por mês, prontos para os gráficos e modelos. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+Essas três camadas ficam guardadas em um formato chamado Delta Lake — um sistema de armazenamento de dados moderno que garante que nenhuma informação seja perdida ou corrompida, e que mantém um ``histórico de alterações'' de cada tabela, como um controle de versões.
+
+\subsection{Fontes de dados utilizadas}
+
+\begin{center}
+\begin{longtable}{p{2.8cm}p{4.2cm}p{7.5cm}}
+\toprule
+\textbf{Fonte} & \textbf{Tipo de dado} & \textbf{Situação} \\
+\midrule
+\endhead
+Planilhas do DAEE (vazão e chuva) & Real / observado & Processadas: mais de 12 mil registros de vazão e 94 mil de chuva, de 1888 a 2026. \\
+API pública da ANA (HidroWeb/SNIRH) & Real / observado & Conector construído e testado: mais de 1.700 registros de vazão e 6.300 de chuva buscados diretamente da agência. \\
+Cadastro de estações de monitoramento & Real / observado & 699 estações do estado de SP, das quais 32 estão sobre o eixo do Rio Tietê. \\
+Qualidade da água e uso do solo (1940-2025) & Simulado (proxy histórico) & Série sintética baseada em tendências da CETESB, usada como referência enquanto não há uma fonte real digitalizada equivalente. \\
+Sensoriamento remoto (satélite) & Simulado (placeholder) & Dados de exemplo, no formato que futuramente será substituído por imagens reais de satélite. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+É importante destacar: a ferramenta sempre marca, em cada informação, se ela é um dado real (medido) ou um dado simulado (estimado). Isso evita que alguém confunda uma estimativa com uma medição de campo.
+
+\subsection{Busca automática de novos dados todo mês}
+
+Foi criado um programa (``monthly\_job'', o ``trabalho mensal'') que, quando executado, repete automaticamente todo o processo de busca e organização dos dados — incluindo a busca de novidades diretamente na API da ANA. Assim, a ferramenta pode manter seus dados atualizados mês a mês sem intervenção manual repetida.
+
+\section{Módulo 2 — Modelagem Híbrida (Biofísica, Machine Learning e Agentes)}
+
+Este é o ``cérebro'' da plataforma: um conjunto de modelos matemáticos que simulam como o rio se comportaria sob diferentes decisões de gestão (por exemplo, mais ou menos restrição para captação de água) e diferentes condições climáticas. Três abordagens científicas diferentes foram combinadas — por isso o nome ``híbrida''.
+
+\subsection{Modelo Biofísico — as leis da física da água}
+
+Este modelo aplica fórmulas clássicas de hidrologia (o estudo da água) para simular, mês a mês, quanta água entra no rio (chuva), quanta evapora, e quanta escoa e vira vazão. Ele também simula como a poluição lançada no rio se dilui e se degrada ao longo da distância — usando uma fórmula clássica chamada Streeter-Phelps, usada há quase um século em engenharia ambiental para prever os níveis de oxigênio dissolvido na água.
+
+\subsection{Modelo de Machine Learning — aprendendo com o histórico}
+
+Este modelo não aplica fórmulas físicas; em vez disso, ele ``aprende'' padrões observando anos de dados históricos (chuva, vazão, qualidade da água) e usa esse aprendizado para prever rapidamente como a qualidade da água deve se comportar nos próximos meses. É a mesma família de tecnologia usada em previsão de tempo ou recomendação de produtos — aqui aplicada à saúde do rio. Nos testes realizados, o modelo acertou as previsões com mais de 99\% de precisão sobre os dados de teste (dados que ele não viu durante o aprendizado).
+
+\subsection{Modelo Baseado em Agentes — simulando pessoas e instituições}
+
+Esta é a parte mais inovadora: uma simulação onde cinco ``personagens'' (chamados tecnicamente de agentes) tomam decisões mês a mês, como em um jogo de simulação de cidade:
+
+\begin{center}
+\begin{longtable}{p{4cm}p{10.5cm}}
+\toprule
+\textbf{Agente} & \textbf{O que ele faz na simulação} \\
+\midrule
+\endhead
+Comitê de Bacia & Decide quanto de água pode ser retirada do rio (outorga), apertando as regras quando a qualidade piora. \\
+Indústria & Aumenta gradualmente sua produção (e poluição) — a não ser que seja multada, quando reduz e investe em tratamento. \\
+Agricultor & Ajusta o uso de fertilizantes/agrotóxicos conforme a pressão ambiental do cenário. \\
+Concessionária & Monitora se há água suficiente para o abastecimento da população. \\
+Poder Público & Aplica multas às indústrias quando a qualidade da água atinge níveis críticos. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+A cada mês simulado, esses cinco agentes observam o estado do rio (usando o modelo biofísico descrito acima) e ajustam suas próprias decisões — que, por sua vez, afetam o estado do rio no mês seguinte. É um ciclo de causa e efeito que se repete ano após ano, permitindo enxergar, por exemplo, o que aconteceria com a qualidade da água em 5, 15 ou 30 anos sob diferentes políticas.
+
+\subsection{Cenários comparados pela ferramenta}
+
+\begin{center}
+\begin{longtable}{p{4cm}p{10.5cm}}
+\toprule
+\textbf{Cenário} & \textbf{O que muda} \\
+\midrule
+\endhead
+Atual & Mantém as regras e o clima observado/esperado, sem alterações — o caminho ``sem intervenção''. \\
+Alta Restrição de Outorga & Simula um controle mais rígido sobre a quantidade de água retirada do rio. \\
+Mudança Climática Extrema & Simula um cenário com 25\% menos chuva, representando um clima mais severo no futuro. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Transparência sobre limitações}
+
+\begin{calloutbox}
+\textbf{Importante:}\\
+Os modelos usados são simplificados e não foram calibrados com medições de campo específicas do Rio Tietê — eles usam valores de referência da literatura científica. O ``índice de qualidade da água'' calculado pela simulação é uma versão simplificada do índice oficial (que usa 9 parâmetros diferentes). Além disso, cada trecho do rio (Alto, Médio e Baixo Tietê) é simulado de forma independente, sem considerar ainda que a água de um trecho deságua no seguinte. Essas limitações estão documentadas abertamente no próprio código, para que qualquer pessoa que continue o projeto saiba exatamente o que precisa ser refinado.
+\end{calloutbox}
+
+\section{Módulo 3 — Dashboard Web Interativo}
+
+É a parte da ferramenta que as pessoas realmente veem e usam: um painel visual interativo, acessado pelo navegador de internet, sem necessidade de instalar nenhum programa. Foi construído com Streamlit (para a interface), Plotly (para os gráficos) e Folium (para os mapas) — tecnologias amplamente usadas no mercado para esse tipo de painel.
+
+\begin{center}
+\begin{longtable}{p{4cm}p{10.5cm}}
+\toprule
+\textbf{Página} & \textbf{O que mostra} \\
+\midrule
+\endhead
+Página Inicial & Um resumo visual (``cartões'') com o estado atual de cada trecho do rio: índice de qualidade da água, oxigênio dissolvido e poluição orgânica, com um selo colorido (bom / atenção / sério / crítico). \\
+Mapa Interativo & Um mapa em que é possível ver, ao longo do rio, todas as estações de monitoramento reais, coloridas por trecho, com informações ao clicar em cada uma. \\
+Séries Históricas & Gráficos com a evolução, ao longo do tempo (1888 a 2026), da vazão, da chuva e da qualidade da água — com filtros por posto de medição e por trecho. \\
+Comparativo de Cenários & Roda a simulação (o Módulo 2) ao vivo e mostra, lado a lado, como cada cenário (Atual, Restrição, Clima Extremo) afeta o rio no curto, médio e longo prazo. \\
+Relatório Automático & Gera automaticamente um texto explicando a situação de um trecho do rio em um determinado ano, como se fosse escrito por um analista. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{Módulo 4 — Publicação Online (Deploy)}
+
+Para que a ferramenta pudesse ser acessada de qualquer computador, celular ou tablet — sem depender do computador de desenvolvimento estar ligado — ela foi publicada na internet usando dois serviços gratuitos e amplamente usados pela comunidade de programação:
+
+\begin{itemize}
+\item GitHub: um repositório online onde o código-fonte do projeto fica guardado, versionado e disponível.
+\item Streamlit Community Cloud: um serviço gratuito de hospedagem que lê o código no GitHub e o transforma automaticamente em um site funcionando, com um endereço público fixo.
+\end{itemize}
+
+Durante esse processo, alguns problemas técnicos comuns em publicações desse tipo foram identificados e corrigidos — como uma dependência (um ``pacote'' de código de terceiros, chamado networkx) que não era instalada automaticamente pelo serviço de hospedagem. Cada correção foi testada em um ambiente limpo antes de ser publicada, para garantir que o problema não se repetisse.
+
+\begin{calloutbox}
+\textbf{Resultado:}\\
+A ferramenta está publicada e acessível publicamente pela internet, com atualização automática sempre que o código-fonte é alterado no GitHub.
+\end{calloutbox}
+
+\section{Módulo 5 — Identidade Visual e Experiência do Usuário}
+
+Na etapa final, a aparência do painel foi refinada para um padrão mais profissional, incluindo:
+
+\begin{itemize}
+\item Uma paleta de cores consistente (azul como cor principal), aplicada em todos os gráficos, mapas e botões.
+\item Uma fonte de texto mais moderna (Inter), usada em bibliotecas de design profissional.
+\item Cartões visuais organizando as informações, em vez de números soltos na tela.
+\item Remoção de elementos decorativos (como emojis nos títulos) que não agregavam informação.
+\item Uma marca (``WaterWeave'') fixa no menu lateral, presente em todas as páginas.
+\item Um menu de navegação organizado na barra lateral, explicando o que cada página mostra.
+\end{itemize}
+
+\section{Estado Atual do Projeto}
+
+\begin{center}
+\begin{longtable}{p{4cm}p{10.5cm}}
+\toprule
+\textbf{Módulo} & \textbf{Situação} \\
+\midrule
+\endhead
+Pipeline de Ingestão de Dados & Concluído e testado com dados reais (DAEE + ANA). \\
+Modelagem Híbrida (Biofísico + ML + ABM) & Concluído, funcional e testado; limitações documentadas. \\
+Dashboard Web & Concluído, publicado e com identidade visual refinada. \\
+Publicação Online & Concluída — ferramenta acessível publicamente pela internet. \\
+Conector de dados da CETESB & Pendente — a agência não oferece uma via automática (API) pública para isso; hoje a ferramenta usa uma estimativa (dado simulado) em seu lugar. \\
+Conector de dados do MapBiomas (uso do solo por satélite) & Pendente — requer autenticação adicional (Google Earth Engine) que ainda não foi configurada. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{Próximos Passos Recomendados}
+
+\begin{itemize}
+\item Conectar o modelo de uso do solo a dados reais do MapBiomas, quando a autenticação estiver disponível.
+\item Investigar uma forma de obter dados reais de qualidade da água da CETESB, mesmo que via download manual periódico.
+\item Encadear os três trechos do rio na simulação (hoje cada um é simulado de forma isolada).
+\item Calibrar os modelos biofísicos com dados de campo reais do Rio Tietê, quando disponíveis.
+\item Ampliar o conector da ANA para cobrir mais estações e um histórico ainda mais completo.
+\end{itemize}
+
+\section{Glossário de Termos Técnicos}
+
+\noindent\textbf{API:} Um ``canal'' padronizado pelo qual um programa de computador pode pedir dados diretamente a outro sistema (neste caso, aos servidores da ANA), sem precisar de uma pessoa baixando planilhas manualmente.
+
+\noindent\textbf{Pipeline de dados:} Uma sequência automatizada de etapas que busca, limpa e organiza dados, como uma linha de produção.
+
+\noindent\textbf{Machine Learning (Aprendizado de Máquina):} Técnica em que um programa aprende padrões a partir de exemplos históricos, em vez de seguir regras fixas escritas por uma pessoa.
+
+\noindent\textbf{Modelo Baseado em Agentes (ABM):} Tipo de simulação em que ``personagens'' independentes tomam decisões próprias, e o resultado final emerge da interação entre eles.
+
+\noindent\textbf{Dashboard:} Painel visual (com gráficos, mapas e números) que resume informações complexas de forma fácil de entender rapidamente.
+
+\noindent\textbf{Deploy / Publicação online:} Processo de colocar um programa para funcionar em um servidor de internet, para que outras pessoas possam acessá-lo remotamente.
+
+\noindent\textbf{Delta Lake:} Um formato de armazenamento de dados em tabelas que garante confiabilidade e mantém um histórico de todas as alterações feitas.
+
+\noindent\textbf{Streeter-Phelps:} Fórmula matemática clássica (de 1925) usada para prever como o oxigênio dissolvido na água de um rio muda conforme a poluição se desloca rio abaixo.
+
+\noindent\textbf{Índice de Qualidade da Água (IQA):} Um número (de 0 a 100) que resume, em uma única escala, o quão saudável está a água de um rio.
+
+\noindent\textbf{Proxy / dado simulado:} Uma estimativa usada no lugar de uma medição real, quando a medição real ainda não está disponível — sempre identificada como tal na ferramenta.
+
+\end{document}
