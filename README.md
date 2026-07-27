@@ -60,9 +60,21 @@ $env:WATERWEAVE_CDS_API_KEY = "seu-token-pessoal"
 ```
 
 Sem essa variável definida, `era5_cmip6.py` levanta um erro claro — ver
-`config.CDS_API_KEY`. Ainda não está religado a `models.abm.scenarios`/
-`models.abm.model` (ver ACHADO DE PESQUISA na docstring do módulo) — hoje é
-um conector funcional e testado, mas isolado do resto do pipeline.
+`config.CDS_API_KEY`.
+
+**Calibrar `fator_clima` do cenário "Mudança Climática Extrema" com CMIP6 real**: por padrão
+esse cenário usa um proxy fixo (chuva -25%). Para calibrá-lo com a projeção CMIP6 real
+(SSP5-8.5, comparada ao período de referência 1995-2014), com `WATERWEAVE_CDS_API_KEY`
+configurado:
+
+```powershell
+python -m waterweave.ingestion.connectors.era5_cmip6
+```
+
+Isso grava `data/fator_clima_cmip6.json` (versionado no repositório) — `models.abm.scenarios`
+passa a ler esse arquivo automaticamente na próxima vez que for importado (`models.abm.clima_real`,
+sem precisar de rede). Sem o arquivo, cai de volta no proxy fixo — nunca quebra a aplicação por
+falta de calibração.
 
 ## Serviços ecossistêmicos, acoplamento ML↔biofísico e co-criação
 

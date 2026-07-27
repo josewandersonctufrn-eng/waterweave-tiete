@@ -148,3 +148,11 @@ CDS_API_KEY = os.environ.get("WATERWEAVE_CDS_API_KEY")
 # óptico — não faz sentido, nem é preciso o suficiente na resolução do ERA5 (~28km) para pedir
 # recorte por trecho individual).
 BBOX_BACIA_TIETE = (-24.0, -52.0, -20.0, -45.5)
+
+# Artefato de calibração do `fator_clima` do ABM a partir de projeções CMIP6 reais (ver
+# `connectors.era5_cmip6.calibrar_fatores_clima_cenarios`/`models.abm.clima_real`) — um JSON
+# pequeno {cenario_id: fator}, gerado em lote (exige token CDS + rede, não roda no boot da
+# aplicação) e lido de forma síncrona por `scenarios.py`. VERSIONADO (não gitignored): é um
+# resultado de calibração barato de regravar mas caro (rede + tempo de fila da CDS) de gerar do
+# zero a cada checkout — assim como os modelos `.joblib` em `data/models/`.
+FATOR_CLIMA_CALIBRACAO_FILE = PROJECT_ROOT / "data" / "fator_clima_cmip6.json"

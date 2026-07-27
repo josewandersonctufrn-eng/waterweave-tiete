@@ -4,9 +4,15 @@ Cada cenário configura os parâmetros iniciais/estruturais do `RioTieteModel`:
   - "atual": clima e regras de decisão sem alteração.
   - "alta_restricao_outorga": piso de outorga mais alto (menos captação
     permitida) e agricultores sob pressão regulatória ativa.
-  - "mudanca_climatica_extrema": chuva reduzida em 25% — proxy simplificado
-    para um cenário de aquecimento tipo CMIP6 SSP5-8.5, até que
-    `ingestion.connectors.era5_cmip6` forneça a projeção real.
+  - "mudanca_climatica_extrema": chuva reduzida segundo `fator_clima` — ver ATUALIZAÇÃO abaixo.
+
+ATUALIZAÇÃO (2026-07, CMIP6 -> `fator_clima`): o `fator_clima` de `"mudanca_climatica_extrema"`
+deixou de ser um proxy fixo de -25% — agora vem de `models.abm.clima_real.fator_clima_calibrado`,
+que lê uma calibração real feita a partir de projeções CMIP6 (cenário SSP5-8.5, ver
+`ingestion.connectors.era5_cmip6.calibrar_fatores_clima_cenarios`) quando ela existe
+(`config.FATOR_CLIMA_CALIBRACAO_FILE`), e cai de volta no mesmo -25% fixo de antes quando não
+(checkout novo, calibração nunca rodada) — ver docstring de `models.abm.clima_real` para o
+racional completo do porquê a calibração é um passo em lote, não uma chamada ao vivo aqui.
 """
 from __future__ import annotations
 
@@ -14,7 +20,13 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from waterweave.models.abm import clima_real
 from waterweave.models.abm.model import RioTieteModel
+
+# Valor fixo pré-CMIP6 — mantido como `fallback` de `clima_real.fator_clima_calibrado` (ver
+# ATUALIZAÇÃO na docstring do módulo), não como o valor efetivamente usado quando a calibração
+# real está disponível.
+_FATOR_CLIMA_EXTREMA_FALLBACK = 0.75
 
 
 @dataclass(frozen=True)
@@ -34,14 +46,22 @@ CENARIOS = {
     "mudanca_climatica_extrema": Cenario(
         "mudanca_climatica_extrema",
         "Mudança Climática Extrema",
-        "Chuva reduzida em 25% em relação à climatologia histórica (proxy simplificado de cenário CMIP6 severo).",
+        "Chuva reduzida em relação à climatologia histórica, segundo cenário CMIP6 SSP5-8.5 "
+        "(calibrado de projeção real quando disponível — ver ATUALIZAÇÃO na docstring do módulo; "
+        "proxy fixo de -25% como piso quando não).",
     ),
 }
 
 PARAMETROS_CENARIO = {
     "atual": {"fator_clima": 1.0, "piso_fator_outorga": 0.5, "restricao_ambiental": False},
     "alta_restricao_outorga": {"fator_clima": 1.0, "piso_fator_outorga": 0.80, "restricao_ambiental": True},
-    "mudanca_climatica_extrema": {"fator_clima": 0.75, "piso_fator_outorga": 0.5, "restricao_ambiental": False},
+    "mudanca_climatica_extrema": {
+        "fator_clima": clima_real.fator_clima_calibrado(
+            "mudanca_climatica_extrema", fallback=_FATOR_CLIMA_EXTREMA_FALLBACK
+        ),
+        "piso_fator_outorga": 0.5,
+        "restricao_ambiental": False,
+    },
 }
 
 HORIZONTE_MESES = {"curto_prazo": 60, "medio_prazo": 180, "longo_prazo": 360}

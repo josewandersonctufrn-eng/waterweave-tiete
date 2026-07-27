@@ -95,3 +95,69 @@ def test_processar_projecao_com_precipitacao_converte_kg_m2_s_para_mm_mes():
 )
 def test_mapa_de_cenario_aceita_rotulo_popular_ou_id_tecnico(cenario, experimento_esperado):
     assert ec.CENARIO_PARA_EXPERIMENTO_CMIP6.get(cenario, cenario) == experimento_esperado
+
+
+# ---------------------------------------------------------------------------------------------
+# CMIP6 -> `fator_clima` do ABM (`fator_precipitacao_relativo`, `calibrar_fator_clima_ssp`,
+# `calibrar_fatores_clima_cenarios`, `salvar_calibracao_fator_clima`) — ver ATUALIZAÇÃO na
+# docstring do módulo e `tests/test_clima_real.py` para o lado que LÊ a calibração.
+# ---------------------------------------------------------------------------------------------
+import json
+from datetime import date
+
+import pandas as pd
+
+
+def test_fator_precipitacao_relativo_calcula_razao_das_medias():
+    baseline = pd.DataFrame({"chuva_mm_total": [100.0, 110.0, 90.0]})
+    projecao = pd.DataFrame({"chuva_mm_total": [70.0, 80.0, 75.0]})
+    fator = ec.fator_precipitacao_relativo(baseline, projecao)
+    assert fator == pytest.approx((70.0 + 80.0 + 75.0) / 3 / ((100.0 + 110.0 + 90.0) / 3))
+
+
+def test_fator_precipitacao_relativo_sem_chuva_levanta_erro_claro():
+    baseline = pd.DataFrame({"chuva_mm_total": [100.0]})
+    sem_chuva = pd.DataFrame({"temperatura_c_media": [20.0]})
+    with pytest.raises(ValueError, match="chuva_mm_total"):
+        ec.fator_precipitacao_relativo(baseline, sem_chuva)
+    with pytest.raises(ValueError, match="chuva_mm_total"):
+        ec.fator_precipitacao_relativo(sem_chuva, baseline)
+
+
+def test_calibrar_fator_clima_ssp_busca_baseline_e_projecao_na_janela_certa(monkeypatch):
+    chamadas = []
+
+    def _fetch_projection_falso(cenario, bbox=None, desde=None, ate=None, modelo=None, url=None, key=None):
+        chamadas.append((cenario, desde, ate))
+        valor = 100.0 if cenario == "historical" else 65.0
+        return pd.DataFrame({"chuva_mm_total": [valor] * 12})
+
+    monkeypatch.setattr(ec, "fetch_projection", _fetch_projection_falso)
+    fator = ec.calibrar_fator_clima_ssp("SSP5-8.5", ano_futuro_centro=2050, janela_anos=20)
+
+    assert fator == pytest.approx(0.65)
+    assert chamadas[0] == ("historical", ec.BASELINE_CMIP6_DESDE, ec.BASELINE_CMIP6_ATE)
+    assert chamadas[1] == ("SSP5-8.5", date(2040, 1, 1), date(2060, 12, 31))
+
+
+def test_calibrar_fatores_clima_cenarios_cobre_todo_cenario_abm_mapeado(monkeypatch):
+    monkeypatch.setattr(
+        ec, "fetch_projection",
+        lambda cenario, **kw: pd.DataFrame({"chuva_mm_total": [100.0 if cenario == "historical" else 70.0] * 12}),
+    )
+    fatores = ec.calibrar_fatores_clima_cenarios(ano_futuro_centro=2050)
+    assert set(fatores) == set(ec.CENARIO_ABM_PARA_SSP)
+    assert fatores["mudanca_climatica_extrema"] == pytest.approx(0.7)
+
+
+def test_salvar_calibracao_fator_clima_grava_json_com_metadados(tmp_path):
+    caminho = tmp_path / "fator_clima_cmip6.json"
+    fatores = {"mudanca_climatica_extrema": 0.68}
+    resultado = ec.salvar_calibracao_fator_clima(fatores, caminho=caminho)
+
+    assert resultado == caminho
+    conteudo = json.loads(caminho.read_text(encoding="utf-8"))
+    assert conteudo["fatores_clima"] == fatores
+    assert conteudo["modelo_cmip6"] == ec._MODELO_CMIP6_PADRAO
+    assert conteudo["baseline"]["desde"] == ec.BASELINE_CMIP6_DESDE.isoformat()
+    assert "calibrado_em" in conteudo

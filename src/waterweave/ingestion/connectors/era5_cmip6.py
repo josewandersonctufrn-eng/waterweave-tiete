@@ -64,25 +64,47 @@ LIMITAÇÕES CONHECIDAS (mesmo espírito das já documentadas em
     precisão real; se necessário no futuro, os 3 trechos já têm bounding boxes menores
     implícitos nos pontos de `sensoriamento_historico.PONTOS_MONITORAMENTO`.
   - `fetch_projection` não faz ensemble multi-modelo (ver acima).
-  - Próximos passos (não feitos aqui): (1) religar a chuva/temperatura do ERA5 para CALIBRAR
-    `models.abm.model._climatologia_mensal` no lugar da climatologia só-DAEE; (2) religar o
-    delta CMIP6 (projeção - histórico, por mês) para SUBSTITUIR o proxy fixo de -25% de chuva em
-    `models.abm.scenarios.PARAMETROS_CENARIO["mudanca_climatica_extrema"]` por um `fator_clima`
-    calculado a partir do cenário SSP escolhido.
+  - Próximos passos (não feitos aqui): religar a chuva/temperatura do ERA5 para CALIBRAR
+    `models.abm.model._climatologia_mensal` no lugar da climatologia só-DAEE — o item de
+    religar CMIP6 ao `fator_clima` do ABM (antes listado aqui) foi feito, ver
+    `calibrar_fatores_clima_cenarios`/`models.abm.clima_real` abaixo.
+
+ATUALIZAÇÃO (2026-07, CMIP6 -> `fator_clima` do ABM): `calibrar_fatores_clima_cenarios`
+substitui o proxy fixo de -25% de chuva em
+`models.abm.scenarios.PARAMETROS_CENARIO["mudanca_climatica_extrema"]` por um fator calculado a
+partir da razão entre a precipitação média projetada (CMIP6, cenário SSP5-8.5, numa janela de
+anos futura) e a precipitação média do período de referência `historical` (1995-2014, a mesma
+baseline de 20 anos usada pelo IPCC AR6) — ver `CENARIO_ABM_PARA_SSP`. Como isso exige rede e
+token CDS (indisponíveis no boot da aplicação Streamlit em produção), a calibração NÃO roda ao
+vivo: é um passo em lote (`python -m waterweave.ingestion.connectors.era5_cmip6`, ou chamando
+`calibrar_fatores_clima_cenarios`/`salvar_calibracao_fator_clima` manualmente) que grava o
+resultado em `config.FATOR_CLIMA_CALIBRACAO_FILE` (JSON pequeno, versionado). `models.abm.clima_real`
+lê esse arquivo de forma síncrona e rápida (sem rede) — se ele não existir (checkout novo, ou
+antes da primeira calibração), cai de volta no valor fixo de -25%, com aviso no log — mesmo
+espírito de fallback documentado (real-quando-disponível, simulado-como-piso) já usado em
+`transform.gold_features.qualidade_real_com_fallback_simulado`/`uso_solo_da_linha`.
 """
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
 import zipfile
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import cdsapi
 import pandas as pd
 import xarray as xr
 
-from waterweave.config import BBOX_BACIA_TIETE, CDS_API_KEY, CDS_API_URL, FONTE_TIPO_OBSERVADO, FONTE_TIPO_SIMULADO
+from waterweave.config import (
+    BBOX_BACIA_TIETE,
+    CDS_API_KEY,
+    CDS_API_URL,
+    FATOR_CLIMA_CALIBRACAO_FILE,
+    FONTE_TIPO_OBSERVADO,
+    FONTE_TIPO_SIMULADO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +302,124 @@ def fetch_projection(
     return resultado
 
 
+# ---------------------------------------------------------------------------------------------
+# CMIP6 -> `fator_clima` do ABM (`models.abm.scenarios.PARAMETROS_CENARIO`) — ver ATUALIZAÇÃO na
+# docstring do módulo.
+# ---------------------------------------------------------------------------------------------
+
+# Período de referência ("baseline") padrão do IPCC AR6 para medir mudança climática relativa —
+# 20 anos, encerrando no último ano do experimento `historical` do CMIP6 (2014). Usar a MESMA
+# janela de 20 anos nos dois lados (baseline e futuro) evita que a diferença de tamanho de
+# amostra, por si só, mude a média comparada.
+BASELINE_CMIP6_DESDE = date(1995, 1, 1)
+BASELINE_CMIP6_ATE = date(2014, 12, 31)
+JANELA_ANOS_PADRAO = 20
+
+# Cenário do ABM (`models.abm.scenarios.PARAMETROS_CENARIO`) -> experimento CMIP6 usado para
+# calibrar seu `fator_clima`. Só "mudanca_climatica_extrema" tem uma contraparte CMIP6 hoje
+# (os outros 2 cenários do ABM não são climáticos — mexem em outorga/fiscalização, não em
+# chuva); ampliar esse mapa é a forma natural de adicionar novos cenários climáticos no futuro
+# (ex.: "mudanca_climatica_moderada" -> "ssp245"), sem mexer em `calibrar_fatores_clima_cenarios`.
+CENARIO_ABM_PARA_SSP = {"mudanca_climatica_extrema": "SSP5-8.5"}
+
+
+def fator_precipitacao_relativo(baseline: pd.DataFrame, projecao: pd.DataFrame) -> float:
+    """Razão entre a precipitação média mensal projetada e a precipitação média mensal do
+    período de referência — o `fator_clima` que `models.abm.model.RioTieteModel.step` usa como
+    multiplicador direto da climatologia de chuva (`chuva_mes = chuva_climatologica *
+    fator_clima`, ver `models.abm.model`). Valores < 1.0 = cenário mais seco que o baseline; > 1.0
+    = mais chuvoso. Não depende de rede — pura manipulação dos DataFrames já baixados, testável
+    com dados sintéticos (ver `tests/test_era5_cmip6.py`).
+
+    Levanta `ValueError` claro se `chuva_mm_total` não estiver disponível em algum dos dois
+    (alguns modelos CMIP6 não expõem a variável `pr`, ver LIMITAÇÕES na docstring do módulo) —
+    melhor falhar alto do que silenciosamente calibrar um fator só de temperatura como se fosse
+    de chuva."""
+    for nome, tabela in (("baseline", baseline), ("projecao", projecao)):
+        if "chuva_mm_total" not in tabela.columns or tabela["chuva_mm_total"].dropna().empty:
+            raise ValueError(
+                f"'{nome}' sem dado de precipitação ('chuva_mm_total') — o modelo CMIP6 escolhido "
+                "pode não expor a variável 'pr' para este experimento (ver LIMITAÇÕES na "
+                "docstring de waterweave.ingestion.connectors.era5_cmip6)."
+            )
+    media_baseline = baseline["chuva_mm_total"].mean()
+    media_projecao = projecao["chuva_mm_total"].mean()
+    if not media_baseline:
+        raise ValueError("Precipitação média do baseline é zero — divisão por zero evitada.")
+    return float(media_projecao / media_baseline)
+
+
+def calibrar_fator_clima_ssp(
+    experimento: str,
+    ano_futuro_centro: int,
+    janela_anos: int = JANELA_ANOS_PADRAO,
+    bbox: tuple[float, float, float, float] = BBOX_BACIA_TIETE,
+    modelo: str = _MODELO_CMIP6_PADRAO,
+    url: str = CDS_API_URL,
+    key: str | None = CDS_API_KEY,
+) -> float:
+    """Calibra um `fator_clima` para UM experimento SSP: busca a projeção `historical` (baseline
+    `BASELINE_CMIP6_DESDE`-`BASELINE_CMIP6_ATE`) e a projeção do `experimento` numa janela de
+    `janela_anos` centrada em `ano_futuro_centro`, e retorna a razão entre as duas
+    (`fator_precipitacao_relativo`). Faz 2 chamadas de rede (`fetch_projection` duas vezes) —
+    lento, não chamar num caminho quente da aplicação."""
+    meio_janela = janela_anos // 2
+    baseline = fetch_projection(
+        "historical", bbox, desde=BASELINE_CMIP6_DESDE, ate=BASELINE_CMIP6_ATE, modelo=modelo, url=url, key=key
+    )
+    projecao = fetch_projection(
+        experimento,
+        bbox,
+        desde=date(ano_futuro_centro - meio_janela, 1, 1),
+        ate=date(ano_futuro_centro + meio_janela, 12, 31),
+        modelo=modelo,
+        url=url,
+        key=key,
+    )
+    return fator_precipitacao_relativo(baseline, projecao)
+
+
+def calibrar_fatores_clima_cenarios(
+    ano_futuro_centro: int = 2050,
+    janela_anos: int = JANELA_ANOS_PADRAO,
+    bbox: tuple[float, float, float, float] = BBOX_BACIA_TIETE,
+    modelo: str = _MODELO_CMIP6_PADRAO,
+    url: str = CDS_API_URL,
+    key: str | None = CDS_API_KEY,
+) -> dict[str, float]:
+    """Calibra `fator_clima` para TODOS os cenários do ABM que têm contraparte CMIP6
+    (`CENARIO_ABM_PARA_SSP`) — hoje só `"mudanca_climatica_extrema"`. Retorna
+    `{cenario_id: fator_clima}`, pronto para `salvar_calibracao_fator_clima`. `ano_futuro_centro`
+    (default 2050) é um horizonte de médio prazo razoável para o uso típico do dashboard
+    ("Cenários Futuros" vai até 30 anos à frente); recalibrar para outro horizonte é só chamar
+    de novo com outro `ano_futuro_centro`."""
+    return {
+        cenario_id: calibrar_fator_clima_ssp(experimento, ano_futuro_centro, janela_anos, bbox, modelo, url, key)
+        for cenario_id, experimento in CENARIO_ABM_PARA_SSP.items()
+    }
+
+
+def salvar_calibracao_fator_clima(
+    fatores: dict[str, float], caminho: Path = FATOR_CLIMA_CALIBRACAO_FILE, **metadados_extra
+) -> Path:
+    """Grava `fatores` (saída de `calibrar_fatores_clima_cenarios`) em `caminho` (default
+    `config.FATOR_CLIMA_CALIBRACAO_FILE`), com metadados de proveniência (quando/com qual modelo
+    foi calibrado) — lido por `models.abm.clima_real.fator_clima_calibrado` sem precisar de rede."""
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    conteudo = {
+        "fatores_clima": fatores,
+        "modelo_cmip6": _MODELO_CMIP6_PADRAO,
+        "baseline": {"desde": BASELINE_CMIP6_DESDE.isoformat(), "ate": BASELINE_CMIP6_ATE.isoformat()},
+        "calibrado_em": datetime.now(timezone.utc).isoformat(),
+        **metadados_extra,
+    }
+    caminho.write_text(json.dumps(conteudo, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("Calibração de fator_clima gravada em %s: %s", caminho, fatores)
+    return caminho
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     print(fetch_reanalysis(date(2020, 1, 1)).to_string())
+    fatores = calibrar_fatores_clima_cenarios()
+    salvar_calibracao_fator_clima(fatores)
