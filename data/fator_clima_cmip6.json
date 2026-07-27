@@ -1,0 +1,11 @@
+{
+  "fatores_clima": {
+    "mudanca_climatica_extrema": 0.9820527915310199
+  },
+  "modelo_cmip6": "mpi_esm1_2_lr",
+  "baseline": {
+    "desde": "1995-01-01",
+    "ate": "2014-12-31"
+  },
+  "calibrado_em": "2026-07-27T17:47:48.541038+00:00"
+}

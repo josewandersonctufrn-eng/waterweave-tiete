@@ -40,21 +40,31 @@ def test_cliente_com_chave_constroi_client(monkeypatch):
     assert chamadas == {"url": "url-teste", "key": "chave-teste"}
 
 
-def _dataset_reanalise_sintetico() -> "xr.Dataset":
-    """2 meses x grade 2x2 — valores escolhidos para uma média espacial fácil de conferir na
-    mão: jan/2020 com t2m médio 295K e tp médio 0.002 m/dia; fev/2020 com t2m médio 290K e tp
-    médio 0.004 m/dia."""
-    tempo = np.array(["2020-01-01", "2020-02-01"], dtype="datetime64[ns]")
-    t2m = (("time", "lat", "lon"), np.array([[[295.0, 296.0], [294.0, 295.0]], [[290.0, 291.0], [289.0, 290.0]]]))
+def _datasets_reanalise_sinteticos(offset_horas_tp: int = 6) -> list["xr.Dataset"]:
+    """Reproduz a forma REAL da resposta da CDS (descoberta rodando `fetch_reanalysis` contra a
+    CDS de verdade, 2026-07 — ver ACHADO na docstring do módulo): `t2m` e `tp` vêm em DOIS
+    `xr.Dataset` separados, com `valid_time` em horários diferentes dentro do mesmo mês (`tp`,
+    variável acumulada, tem +6h de offset em relação a `t2m`). 2 meses x grade 2x2 — valores
+    escolhidos para uma média espacial fácil de conferir na mão: jan/2020 com t2m médio 295K e
+    tp médio 0.002 m/dia; fev/2020 com t2m médio 290K e tp médio 0.004 m/dia."""
+    tempo_t2m = np.array(["2020-01-01T00:00", "2020-02-01T00:00"], dtype="datetime64[ns]")
+    tempo_tp = tempo_t2m + np.timedelta64(offset_horas_tp, "h")
+
+    t2m = (("valid_time", "lat", "lon"), np.array([[[295.0, 296.0], [294.0, 295.0]], [[290.0, 291.0], [289.0, 290.0]]]))
     tp = (
-        ("time", "lat", "lon"),
+        ("valid_time", "lat", "lon"),
         np.array([[[0.002, 0.003], [0.001, 0.002]], [[0.004, 0.005], [0.003, 0.004]]]),
     )
-    return xr.Dataset({"t2m": t2m, "tp": tp}, coords={"time": tempo})
+    ds_t2m = xr.Dataset({"t2m": t2m}, coords={"valid_time": tempo_t2m})
+    ds_tp = xr.Dataset({"tp": tp}, coords={"valid_time": tempo_tp})
+    return [ds_t2m, ds_tp]
 
 
-def test_processar_reanalise_converte_unidades_e_agrega_espacialmente():
-    resultado = ec._processar_reanalise(_dataset_reanalise_sintetico())
+def test_processar_reanalise_funde_t2m_e_tp_de_arquivos_separados_por_mes():
+    """A CDS retorna t2m/tp em arquivos separados com horários diferentes (ver docstring de
+    `_processar_reanalise`) — o merge precisa ser por mês-calendário, não por timestamp exato,
+    ou as duas variáveis nunca coincidiriam numa mesma linha."""
+    resultado = ec._processar_reanalise(_datasets_reanalise_sinteticos())
 
     assert list(resultado["mes_data"].dt.month) == [1, 2]
     # média espacial de jan: t2m (295+296+294+295)/4 = 295.0K -> 21.85 °C
@@ -65,25 +75,44 @@ def test_processar_reanalise_converte_unidades_e_agrega_espacialmente():
     assert (resultado["fonte_dado"] == "ERA5 (ECMWF) via Copernicus Climate Data Store").all()
 
 
-def _dataset_projecao_sintetico(com_precipitacao: bool) -> "xr.Dataset":
+def test_processar_reanalise_sem_offset_de_horario_tambem_funciona():
+    """Caso a CDS volte a juntar t2m/tp no mesmo horário no futuro, o merge por mês continua
+    funcionando (mês-calendário é um superconjunto do caso "mesmo timestamp exato")."""
+    resultado = ec._processar_reanalise(_datasets_reanalise_sinteticos(offset_horas_tp=0))
+    assert list(resultado["mes_data"].dt.month) == [1, 2]
+
+
+def test_processar_reanalise_sem_uma_das_variaveis_levanta_erro_claro():
+    tempo = np.array(["2020-01-01"], dtype="datetime64[ns]")
+    so_t2m = xr.Dataset({"t2m": (("valid_time", "lat", "lon"), np.array([[[295.0]]]))}, coords={"valid_time": tempo})
+    with pytest.raises(ValueError, match="tp"):
+        ec._processar_reanalise([so_t2m])
+
+
+def _datasets_projecao_sinteticos(com_precipitacao: bool) -> dict[str, "xr.Dataset"]:
+    """Reproduz a forma REAL da resposta da CDS (descoberta rodando `fetch_projection` contra a
+    CDS de verdade, 2026-07 — ver ACHADO na docstring do módulo): pedir `tas`+`pr` na MESMA
+    requisição faz a CDS devolver silenciosamente só uma das duas — por isso cada variável tem
+    seu próprio `xr.Dataset` (e sua própria requisição, em `fetch_projection`)."""
     tempo = np.array(["2050-06-01"], dtype="datetime64[ns]")
     tas = (("time", "lat", "lon"), np.array([[[300.0, 301.0], [299.0, 300.0]]]))
-    data_vars = {"tas": tas}
+    datasets = {"tas": xr.Dataset({"tas": tas}, coords={"time": tempo})}
     if com_precipitacao:
-        data_vars["pr"] = (("time", "lat", "lon"), np.array([[[0.0001, 0.0002], [0.0001, 0.0001]]]))
-    return xr.Dataset(data_vars, coords={"time": tempo})
+        pr = (("time", "lat", "lon"), np.array([[[0.0001, 0.0002], [0.0001, 0.0001]]]))
+        datasets["pr"] = xr.Dataset({"pr": pr}, coords={"time": tempo})
+    return datasets
 
 
 def test_processar_projecao_sem_precipitacao_disponivel_no_modelo():
-    resultado = ec._processar_projecao(_dataset_projecao_sintetico(com_precipitacao=False), "ssp245", "modelo-x")
+    resultado = ec._processar_projecao(_datasets_projecao_sinteticos(com_precipitacao=False), "ssp2_4_5", "modelo-x")
     assert "chuva_mm_total" not in resultado.columns
     assert (resultado["_fonte_tipo"] == "simulado").all()
-    assert (resultado["cenario_id"] == "ssp245").all()
+    assert (resultado["cenario_id"] == "ssp2_4_5").all()
     assert (resultado["modelo_cmip6"] == "modelo-x").all()
 
 
 def test_processar_projecao_com_precipitacao_converte_kg_m2_s_para_mm_mes():
-    resultado = ec._processar_projecao(_dataset_projecao_sintetico(com_precipitacao=True), "ssp245", "modelo-x")
+    resultado = ec._processar_projecao(_datasets_projecao_sinteticos(com_precipitacao=True), "ssp2_4_5", "modelo-x")
     media_pr = (0.0001 + 0.0002 + 0.0001 + 0.0001) / 4
     esperado_mm = media_pr * 86400 * 30  # junho tem 30 dias
     assert resultado["chuva_mm_total"].iloc[0] == pytest.approx(esperado_mm)
@@ -91,7 +120,7 @@ def test_processar_projecao_com_precipitacao_converte_kg_m2_s_para_mm_mes():
 
 @pytest.mark.parametrize(
     "cenario,experimento_esperado",
-    [("SSP2-4.5", "ssp245"), ("SSP1-2.6", "ssp126"), ("SSP5-8.5", "ssp585"), ("ssp245", "ssp245")],
+    [("SSP2-4.5", "ssp2_4_5"), ("SSP1-2.6", "ssp1_2_6"), ("SSP5-8.5", "ssp5_8_5"), ("ssp2_4_5", "ssp2_4_5")],
 )
 def test_mapa_de_cenario_aceita_rotulo_popular_ou_id_tecnico(cenario, experimento_esperado):
     assert ec.CENARIO_PARA_EXPERIMENTO_CMIP6.get(cenario, cenario) == experimento_esperado
@@ -143,7 +172,9 @@ def test_calibrar_fator_clima_ssp_busca_baseline_e_projecao_na_janela_certa(monk
 def test_calibrar_fatores_clima_cenarios_cobre_todo_cenario_abm_mapeado(monkeypatch):
     monkeypatch.setattr(
         ec, "fetch_projection",
-        lambda cenario, **kw: pd.DataFrame({"chuva_mm_total": [100.0 if cenario == "historical" else 70.0] * 12}),
+        # `calibrar_fator_clima_ssp` chama `fetch_projection(experimento, bbox, ...)` com `bbox`
+        # posicional — o mock precisa aceitar isso, não só `cenario` + kwargs.
+        lambda cenario, *args, **kw: pd.DataFrame({"chuva_mm_total": [100.0 if cenario == "historical" else 70.0] * 12}),
     )
     fatores = ec.calibrar_fatores_clima_cenarios(ano_futuro_centro=2050)
     assert set(fatores) == set(ec.CENARIO_ABM_PARA_SSP)

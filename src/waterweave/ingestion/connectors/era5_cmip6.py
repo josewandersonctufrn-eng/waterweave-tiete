@@ -13,16 +13,40 @@ resolução) com a climatologia por trecho já calibrada localmente, o que é um
 modelagem, não só um encaixe de código.
 
 STATUS DE IMPLEMENTAÇÃO: `fetch_reanalysis`/`fetch_projection` deixaram de ser stubs
-`NotImplementedError` e seguem uma rota real de acesso, pesquisada e documentada abaixo — mas,
-diferente de `connectors.mapbiomas`/`connectors.sensoriamento_historico` (Earth Engine, onde a
-extração já foi ao menos exercida manualmente contra a API), aqui a extração NUNCA foi executada
-contra a CDS de verdade: requer um token pessoal (`WATERWEAVE_CDS_API_KEY`, ver
-`config.CDS_API_KEY`) que não está disponível neste ambiente de desenvolvimento. A orquestração
-em torno da rede (montagem de request, conversão de unidades, agregação espacial) é testável e
-testada com `cdsapi`/`xarray` mockados (`tests/test_era5_cmip6.py`, mesma técnica de
-`tests/test_mapbiomas.py`/`tests/test_sensoriamento_historico.py`) — antes de usar em produção,
-rode manualmente contra 1-2 meses conhecidos e confira os valores contra a climatologia DAEE já
-ingerida (`silver.hidrologia`) ou contra literatura.
+`NotImplementedError` e seguem uma rota real de acesso, pesquisada e documentada abaixo.
+
+ACHADO (execução real, 2026-07 — primeira vez que `fetch_reanalysis`/`fetch_projection`
+rodaram contra a CDS de verdade, token pessoal `WATERWEAVE_CDS_API_KEY` configurado): o formato
+de resposta real difere do assumido na pesquisa original, em dois pontos:
+  1. ERA5 (`fetch_reanalysis`): mesmo com `data_format: "netcdf"`, a CDS retorna um `.zip`
+     contendo DOIS arquivos NetCDF separados — `t2m` (variável instantânea, stream `avgua`) e
+     `tp` (variável acumulada, stream `avgad`) NÃO vêm no mesmo arquivo, e o `valid_time` de
+     `tp` tem um offset de +6h em relação ao de `t2m` (mesmo mês nominal, hora do dia diferente
+     — comportamento normal do processamento de variáveis acumuladas do ERA5).
+     `_processar_reanalise` foi corrigida para aceitar uma LISTA de datasets e fundir os dois
+     por MÊS-CALENDÁRIO (não pelo timestamp exato).
+  2. CMIP6 (`fetch_projection`): (a) o id técnico do experimento tem underscores entre os
+     dígitos (`"ssp2_4_5"`, não `"ssp245"` — `CENARIO_PARA_EXPERIMENTO_CMIP6` corrigido); (b) o
+     parâmetro `"level"` não deve ser enviado para variáveis de superfície como
+     `near_surface_air_temperature`/`precipitation` (o schema real da CDS mostra o conjunto de
+     níveis válidos como VAZIO para essas variáveis — enviar `"single_levels"` quebrava o
+     request); (c) o parâmetro correto para o intervalo de datas é `year`+`month` (arrays), não
+     `"date": "YYYY-MM-DD/YYYY-MM-DD"` (que não existe no schema do processo); (d) pedir
+     `near_surface_air_temperature`+`precipitation` na MESMA requisição faz a CDS devolver
+     silenciosamente só uma das duas variáveis (confirmado empiricamente: só `tas` voltava,
+     `pr` sumia sem erro) — `fetch_projection` agora faz UMA requisição por variável
+     (`_baixar_variavel_cmip6`) e funde os resultados em `_processar_projecao` (que passou a
+     receber um dict `{"tas": ds, "pr": ds}` em vez de um único dataset).
+
+Validado com dado real: ERA5 2020-2026 (temperatura ~17-26°C, chuva concentrada out-mar,
+plausível para a bacia do Tietê) e a calibração completa `calibrar_fatores_clima_cenarios()`
+(baseline CMIP6 `historical` 1995-2014 vs. projeção `ssp5_8_5` 2040-2060, modelo
+`mpi_esm1_2_lr`) — resultado real: `fator_clima["mudanca_climatica_extrema"] = 0.982`, ou seja,
+apenas ~1,8% mais seco no cenário mais extremo (SSP5-8.5) que no baseline, bem menos severo que
+o proxy fixo de -25% (`fator_clima = 0.75`) usado antes desta calibração — ver `salvar_calibracao_fator_clima`
+e `models.abm.clima_real` para como esse número passou a substituir o proxy fixo em
+`models.abm.scenarios.PARAMETROS_CENARIO["mudanca_climatica_extrema"]`. Baseado em UM único
+modelo CMIP6 (ver limitação sobre ensemble multi-modelo abaixo) — não tratar como consenso.
 
 Rota de acesso pesquisada (CDS API, pacote `cdsapi`), documentada em
 https://cds.climate.copernicus.eu/how-to-api (consultada 2026-07):
@@ -112,9 +136,9 @@ logger = logging.getLogger(__name__)
 # (`fetch_projection("ssp245", ...)`) — ver `.get(cenario, cenario)` no corpo da função.
 CENARIO_PARA_EXPERIMENTO_CMIP6 = {
     "historical": "historical",
-    "SSP1-2.6": "ssp126",
-    "SSP2-4.5": "ssp245",
-    "SSP5-8.5": "ssp585",
+    "SSP1-2.6": "ssp1_2_6",
+    "SSP2-4.5": "ssp2_4_5",
+    "SSP5-8.5": "ssp5_8_5",
 }
 
 # Modelo CMIP6 leve (baixo volume de dados), mesma escolha do tutorial oficial da CDS para
@@ -154,24 +178,44 @@ def _media_espacial(dataset: "xr.Dataset", variavel: str) -> "xr.DataArray":
     return dataset[variavel].mean(dim=dims_espaciais)
 
 
-def _processar_reanalise(dataset: "xr.Dataset") -> pd.DataFrame:
-    """Converte o `xr.Dataset` baixado da CDS (`reanalysis-era5-single-levels-monthly-means`)
+def _processar_reanalise(datasets: list["xr.Dataset"]) -> pd.DataFrame:
+    """Converte os `xr.Dataset` baixados da CDS (`reanalysis-era5-single-levels-monthly-means`)
     numa série mensal em unidades físicas usuais (°C, mm/mês) — não depende de rede, só de
-    `xarray`, testável com um `xr.Dataset` sintético em memória (ver
-    `tests/test_era5_cmip6.py`)."""
-    temperatura_k = _media_espacial(dataset, "t2m")
-    precipitacao_m_dia = _media_espacial(dataset, "tp")
+    `xarray`/`pandas`, testável com uma lista de `xr.Dataset` sintéticos em memória (ver
+    `tests/test_era5_cmip6.py`).
 
-    coluna_tempo = "valid_time" if "valid_time" in dataset.coords else "time"
-    tempo = pd.to_datetime(dataset[coluna_tempo].values)
+    Recebe uma LISTA porque a CDS retorna `t2m` e `tp` em arquivos NetCDF SEPARADOS (ver ACHADO
+    na docstring do módulo) — funde os dois por MÊS-CALENDÁRIO, não pelo timestamp exato (o
+    `valid_time` de `tp`, variável acumulada, vem com +6h de offset em relação ao de `t2m`,
+    mesmo mês nominal). Levanta `ValueError` claro se alguma das duas variáveis não aparecer em
+    nenhum dos datasets recebidos."""
+    partes: dict[str, pd.DataFrame] = {}
+    for dataset in datasets:
+        for variavel in ("t2m", "tp"):
+            if variavel not in dataset.data_vars:
+                continue
+            coluna_tempo = "valid_time" if "valid_time" in dataset.coords else "time"
+            tempo = pd.to_datetime(dataset[coluna_tempo].values)
+            media = _media_espacial(dataset, variavel).values
+            partes[variavel] = pd.DataFrame({"mes": pd.PeriodIndex(tempo, freq="M"), variavel: media})
+
+    faltando = {"t2m", "tp"} - set(partes)
+    if faltando:
+        raise ValueError(
+            f"Variável(is) ausente(s) na resposta da CDS para reanálise ERA5: {sorted(faltando)} "
+            "(ver ACHADO na docstring do módulo sobre t2m/tp virem em arquivos separados)."
+        )
+
+    combinado = partes["t2m"].merge(partes["tp"], on="mes", how="inner")
+    combinado["mes_data"] = combinado["mes"].dt.to_timestamp()
 
     serie = pd.DataFrame(
         {
-            "mes_data": tempo,
-            "temperatura_c_media": temperatura_k.values - 273.15,
+            "mes_data": combinado["mes_data"],
+            "temperatura_c_media": combinado["t2m"] - 273.15,
             # ERA5 monthly-means dá a média DIÁRIA de precipitação do mês (m/dia) — multiplica
             # pelos dias do mês (converte diário -> mensal) e por 1000 (m -> mm).
-            "chuva_mm_total": precipitacao_m_dia.values * tempo.days_in_month * 1000.0,
+            "chuva_mm_total": combinado["tp"] * combinado["mes_data"].dt.days_in_month * 1000.0,
         }
     )
     serie["_fonte_tipo"] = FONTE_TIPO_OBSERVADO
@@ -179,23 +223,34 @@ def _processar_reanalise(dataset: "xr.Dataset") -> pd.DataFrame:
     return serie.sort_values("mes_data").reset_index(drop=True)
 
 
-def _processar_projecao(dataset: "xr.Dataset", experimento: str, modelo: str) -> pd.DataFrame:
-    """Mesmo papel de `_processar_reanalise`, para o `xr.Dataset` de uma projeção CMIP6 (um
-    modelo/experimento por chamada — ver docstring do módulo)."""
-    temperatura_k = _media_espacial(dataset, "tas")
-    tempo = pd.to_datetime(dataset["time"].values)
+def _processar_projecao(datasets: dict[str, "xr.Dataset"], experimento: str, modelo: str) -> pd.DataFrame:
+    """Mesmo papel de `_processar_reanalise`, para os `xr.Dataset` de uma projeção CMIP6 (um
+    modelo/experimento por chamada — ver docstring do módulo). `datasets` é um dict
+    `{"tas": xr.Dataset, "pr": xr.Dataset}` — uma chave por VARIÁVEL, não um único dataset com
+    as duas (ver ACHADO na docstring do módulo: pedir `tas`+`pr` na MESMA requisição faz a CDS
+    devolver silenciosamente só uma das duas — cada variável precisa da sua própria requisição).
+    `"pr"` é opcional (nem todo modelo CMIP6 disponibiliza precipitação mensal)."""
+    tempo_tas = pd.to_datetime(datasets["tas"]["time"].values)
+    temperatura_k = _media_espacial(datasets["tas"], "tas")
 
-    serie = pd.DataFrame(
-        {
-            "mes_data": tempo,
-            "temperatura_c_media": temperatura_k.values - 273.15,
-        }
-    )
-    if "pr" in dataset.data_vars:
-        precipitacao_kg_m2_s = _media_espacial(dataset, "pr")
+    serie = pd.DataFrame({"mes_data": tempo_tas, "temperatura_c_media": temperatura_k.values - 273.15})
+
+    if "pr" in datasets:
+        tempo_pr = pd.to_datetime(datasets["pr"]["time"].values)
+        precipitacao_kg_m2_s = _media_espacial(datasets["pr"], "pr")
         # `pr` do CMIP6 vem em kg/m²/s (equivalente a mm/s de lâmina d'água) — multiplica pelos
-        # segundos do mês (dias do mês x 86400) para o total mensal em mm.
-        serie["chuva_mm_total"] = precipitacao_kg_m2_s.values * _SEGUNDOS_POR_DIA * tempo.days_in_month
+        # segundos do mês (dias do mês x 86400) para o total mensal em mm. Funde por
+        # MÊS-CALENDÁRIO (não por timestamp exato — mesma cautela de `_processar_reanalise`,
+        # já que `tas`/`pr` vêm de requisições/arquivos separados e podem ter "dia do mês"
+        # nominal ligeiramente diferente entre variáveis)."
+        chuva = pd.DataFrame(
+            {
+                "mes": pd.PeriodIndex(tempo_pr, freq="M"),
+                "chuva_mm_total": precipitacao_kg_m2_s.values * _SEGUNDOS_POR_DIA * tempo_pr.days_in_month,
+            }
+        )
+        serie["mes"] = pd.PeriodIndex(tempo_tas, freq="M")
+        serie = serie.merge(chuva, on="mes", how="left").drop(columns="mes")
 
     serie["cenario_id"] = experimento
     serie["modelo_cmip6"] = modelo
@@ -235,11 +290,60 @@ def fetch_reanalysis(
             },
             str(destino),
         )
-        with xr.open_dataset(destino) as dataset:
-            resultado = _processar_reanalise(dataset)
+        # A CDS retorna um .zip com t2m/tp em arquivos separados (ver ACHADO na docstring do
+        # módulo) — mas trata também o caso de vir um único .nc direto, caso esse comportamento
+        # mude de novo no futuro.
+        if zipfile.is_zipfile(destino):
+            with zipfile.ZipFile(destino) as arquivo_zip:
+                arquivo_zip.extractall(pasta_tmp)
+                netcdfs = [Path(pasta_tmp) / nome for nome in arquivo_zip.namelist() if nome.endswith(".nc")]
+        else:
+            netcdfs = [destino]
+
+        datasets = []
+        for caminho in netcdfs:
+            with xr.open_dataset(caminho) as dataset:
+                datasets.append(dataset.load())
+        resultado = _processar_reanalise(datasets)
 
     logger.info("ERA5 (CDS): %d meses processados (%s a %s).", len(resultado), since, ate)
     return resultado
+
+
+def _baixar_variavel_cmip6(
+    cliente: "cdsapi.Client",
+    pasta_tmp: str,
+    variavel: str,
+    experimento: str,
+    modelo: str,
+    anos: list[str],
+    bbox: tuple[float, float, float, float],
+) -> "xr.Dataset":
+    """Baixa UMA variável CMIP6 (uma requisição por variável — ver ACHADO na docstring do
+    módulo sobre `tas`+`pr` na mesma requisição fazer a CDS devolver só uma das duas em
+    silêncio) e devolve o `xr.Dataset` já carregado em memória (arquivo fechado antes de
+    retornar, seguro para o `tempfile.TemporaryDirectory` ser limpo depois)."""
+    destino_zip = Path(pasta_tmp) / f"cmip6_{variavel}.zip"
+    cliente.retrieve(
+        "projections-cmip6",
+        {
+            "temporal_resolution": "monthly",
+            "experiment": experimento,
+            "variable": [variavel],
+            "model": modelo,
+            "year": anos,
+            "month": [f"{mes:02d}" for mes in range(1, 13)],
+            "area": _area_cds(bbox),
+            "download_format": "zip",
+            "data_format": "netcdf_legacy",
+        },
+        str(destino_zip),
+    )
+    with zipfile.ZipFile(destino_zip) as arquivo_zip:
+        arquivo_zip.extractall(pasta_tmp)
+        netcdfs = [nome for nome in arquivo_zip.namelist() if nome.endswith(".nc")]
+    with xr.open_dataset(Path(pasta_tmp) / netcdfs[0]) as dataset:
+        return dataset.load()
 
 
 def fetch_projection(
@@ -256,7 +360,14 @@ def fetch_projection(
     popular (`"SSP2-4.5"`) quanto o id técnico da CDS (`"ssp245"`) — ver
     `CENARIO_PARA_EXPERIMENTO_CMIP6`. `desde`/`ate`, se não informados, usam os limites usuais
     de cada tipo de experimento na CDS (1850-2014 para `historical`, 2015-2100 para os SSPs).
-    Levanta `RuntimeError` claro se `key` não estiver configurado."""
+    Levanta `RuntimeError` claro se `key` não estiver configurado.
+
+    Faz UMA requisição por variável (temperatura, depois precipitação) — ver ACHADO na
+    docstring do módulo: pedir as duas na MESMA requisição faz a CDS devolver silenciosamente
+    só uma delas. Se a requisição de precipitação falhar (modelo/experimento sem essa variável
+    disponível), segue só com temperatura e registra um aviso — mesmo espírito de
+    `fator_precipitacao_relativo`, que já levanta erro claro se `chuva_mm_total` for necessária
+    e não estiver disponível."""
     experimento = CENARIO_PARA_EXPERIMENTO_CMIP6.get(cenario, cenario)
     if desde is None or ate is None:
         desde_padrao, ate_padrao = (
@@ -268,33 +379,18 @@ def fetch_projection(
         ate = ate or ate_padrao
 
     cliente = _cliente_cds(url, key)
+    anos = [str(ano) for ano in range(desde.year, ate.year + 1)]
 
     with tempfile.TemporaryDirectory() as pasta_tmp:
-        destino_zip = Path(pasta_tmp) / "cmip6.zip"
-        cliente.retrieve(
-            "projections-cmip6",
-            {
-                "temporal_resolution": "monthly",
-                "experiment": experimento,
-                "level": "single_levels",
-                "variable": ["near_surface_air_temperature", "precipitation"],
-                "model": modelo,
-                "date": f"{desde.isoformat()}/{ate.isoformat()}",
-                "area": _area_cds(bbox),
-                "download_format": "zip",
-                "data_format": "netcdf_legacy",
-            },
-            str(destino_zip),
-        )
-        with zipfile.ZipFile(destino_zip) as arquivo_zip:
-            arquivo_zip.extractall(pasta_tmp)
-            netcdfs = [Path(pasta_tmp) / nome for nome in arquivo_zip.namelist() if nome.endswith(".nc")]
-
-        partes = []
-        for caminho in netcdfs:
-            with xr.open_dataset(caminho) as dataset:
-                partes.append(_processar_projecao(dataset, experimento, modelo))
-        resultado = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
+        datasets = {"tas": _baixar_variavel_cmip6(cliente, pasta_tmp, "near_surface_air_temperature", experimento, modelo, anos, bbox)}
+        try:
+            datasets["pr"] = _baixar_variavel_cmip6(cliente, pasta_tmp, "precipitation", experimento, modelo, anos, bbox)
+        except Exception:
+            logger.warning(
+                "CMIP6 (CDS): precipitação indisponível para modelo=%s, experimento=%s — "
+                "seguindo só com temperatura.", modelo, experimento, exc_info=True,
+            )
+        resultado = _processar_projecao(datasets, experimento, modelo)
 
     logger.info(
         "CMIP6 (CDS): %d meses processados, cenário %s, modelo %s.", len(resultado), experimento, modelo
