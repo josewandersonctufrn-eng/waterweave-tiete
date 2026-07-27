@@ -12,10 +12,57 @@ Tabelas produzidas:
     quem eventualmente precise de vazão/chuva mensal com lag; para
     qualidade da água, use `gold.feature_store_ml_anual`.
   - `gold.feature_store_ml_anual`: uma linha por (trecho, ano), com lags e
-    média móvel de IQA/OD em ANOS — fonte de treino correta e atual dos
-    modelos de ML (ver `models.ml.train`).
+    média móvel de IQA/OD em ANOS, mais vazão/chuva e — desde 2026-07 —
+    percentual de área por macro-categoria de uso do solo real (MapBiomas,
+    ver ACHADO DE PESQUISA "uso do solo REAL" abaixo) — fonte de treino
+    correta e atual dos modelos de ML (ver `models.ml.train`).
   - `gold.estado_inicial_abm`: snapshot mais recente por trecho, usado para
     inicializar o `Model` do Mesa a cada rodada de simulação.
+  - `gold.sensoriamento_trecho_ano`: uma linha por (trecho, ano) com os
+    indicadores de sensoriamento remoto (NDVI, turbidez, clorofila-a,
+    temperatura de superfície, sólidos suspensos totais, nível d'água) —
+    ver ACHADO DE PESQUISA (integração de sensoriamento remoto) abaixo
+    para por que ela NÃO é juntada a `feature_store_ml_anual`.
+
+ACHADO DE PESQUISA (2026-07, integração de sensoriamento remoto — pesquisa de
+pós-doutorado / projeto WaterWeave-Water4All): `silver.sensoriamento` (NDVI,
+turbidez, clorofila-a, temperatura de superfície, sólidos suspensos totais,
+nível d'água, ver `ingestion.bronze_sensoriamento`) nunca era lida por
+nenhuma tabela Gold nem entrava como preditora do ML — a "integração de
+dados heterogêneos de sensoriamento remoto e in situ" que a pesquisa se
+propõe a desenvolver não existia de fato no pipeline, mesmo com a ingestão
+já pronta. `build_indicadores_sensoriamento_anual` fecha a agregação (uma
+linha por trecho/ano, no mesmo padrão de `build_feature_store_ml_anual`).
+
+RESSALVA (por que NÃO entra em `feature_store_ml_anual`, ainda): a planilha
+fonte (`Sensoriamento_Remoto_Rio_Tiete.xlsx`) tem 14 linhas no total,
+cobrindo só jan-jun/2026, e se autodeclara "Dados Recentes / Simulação
+Consolidada" — não é série histórica real, e não tem NENHUM ano em comum com
+`qualidade_real_com_fallback_simulado` (CETESB real vai até 2024). Um merge
+por (trecho, ano) hoje produziria 100% de NaN nas colunas de sensoriamento
+para todo o histórico de treino — pior que inútil, um dropna sobre essas
+colunas destruiria o conjunto de treino inteiro (o mesmo erro que o item 6
+da auditoria de ML já corrigiu para vazão/chuva). Por isso esta tabela é
+gravada separada: serve para (a) já deixar pronta a mecânica de fusão de
+dado heterogêneo que a pesquisa precisa, e (b) uma leitura pontual "o que o
+satélite mostra agora", sem contaminar o treino. Quando uma fonte histórica
+real (Landsat 1984+/Sentinel-2 2015+ via Google Earth Engine — mesmo tipo de
+limitação de autenticação interativa documentada em
+`ingestion.connectors.mapbiomas`; ver stub de pesquisa em
+`ingestion.connectors.sensoriamento_historico`) substituir esta planilha
+ilustrativa, aí sim o merge com `feature_store_ml_anual` passa a fazer
+sentido, e os lags/SHAP ganham um driver de sensoriamento remoto real.
+
+ACHADO DE PESQUISA (2026-07, uso do solo REAL como preditora de ML): diferente do
+sensoriamento remoto acima, `silver.uso_solo` (MapBiomas real, via
+`ingestion.bronze_uso_solo`/`ingestion.connectors.mapbiomas`, 1985-2023) TEM sobreposição
+temporal real com a série de qualidade da água (CETESB 1978-2024) — 39 anos em comum. Por
+isso, ao contrário do sensoriamento remoto, esta fonte É juntada a `feature_store_ml_anual`
+(ver bloco de imputação de uso do solo dentro de `build_feature_store_ml_anual`): percentual
+de área por macro-categoria (`pct_natural`/`pct_agropecuaria`/`pct_urbano_industrial`/
+`pct_agua`) vira preditora real de ML, fechando a lacuna de "transformações no uso do solo"
+como driver de qualidade da água que a pesquisa de pós-doutorado pede. Ver
+`models.ml.features` para a lista de preditoras atualizada.
 
 ACHADO DE AUDITORIA DE ML (2026-07): `iqa`/`od_mg_l`/`dbo_mg_l`/
 `metais_pesados_ppm` só existem em granularidade ANUAL na fonte (tanto a
@@ -33,10 +80,14 @@ métricas). `build_feature_store_ml_anual` corrige isso: uma linha por
 """
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from waterweave.config import FONTE_TIPO_OBSERVADO, FONTE_TIPO_SIMULADO, GOLD_DIR, SILVER_DIR, TRECHOS
 from waterweave.io_delta import read_table, write_table
+
+logger = logging.getLogger(__name__)
 
 LAGS_MESES = (1, 3, 12)
 LAGS_ANOS = (1, 2, 3)
@@ -58,10 +109,17 @@ def qualidade_real_com_fallback_simulado() -> pd.DataFrame:
 
 
 def build_serie_temporal_trecho_mes() -> pd.DataFrame:
-    """Junta vazão + chuva (agregadas por trecho/mês) com qualidade da água (anual, repetida por mês)."""
+    """Junta vazão + chuva (agregadas por trecho/mês) com qualidade da água (anual, repetida
+    por mês) e uso do solo real (MapBiomas, `silver.uso_solo` — ver ACHADO DE PESQUISA "uso do
+    solo REAL" na docstring do módulo). As colunas `pct_*` ficam NaN fora da cobertura
+    MapBiomas (antes de 1985/depois de 2023) — SEM imputação aqui (diferente de
+    `build_feature_store_ml_anual`): esta tabela alimenta o ABM/dashboard, que já sabem cair
+    para a classe `uso_solo` simulada quando o percentual real não existe (ver
+    `models.hybrid_bridge.uso_solo_da_linha`)."""
     vazao = read_table(SILVER_DIR / "vazao_mensal")
     chuva = read_table(SILVER_DIR / "chuva_mensal")
     qualidade = qualidade_real_com_fallback_simulado()
+    uso_solo_real = read_table(SILVER_DIR / "uso_solo")
 
     vazao_trecho = vazao.groupby(["trecho_id", "ano", "mes"], as_index=False).agg(
         vazao_m3s_medio=("vazao_m3s", "mean"), n_postos_vazao=("codigo_posto", "nunique")
@@ -72,6 +130,11 @@ def build_serie_temporal_trecho_mes() -> pd.DataFrame:
 
     serie = pd.merge(vazao_trecho, chuva_trecho, on=["trecho_id", "ano", "mes"], how="outer")
     serie = serie.merge(qualidade, on=["trecho_id", "ano"], how="left", suffixes=("", "_qualidade"))
+    if not uso_solo_real.empty:
+        serie = serie.merge(uso_solo_real[["trecho_id", "ano", *COLUNAS_USO_SOLO]], on=["trecho_id", "ano"], how="left")
+    else:
+        for coluna in COLUNAS_USO_SOLO:
+            serie[coluna] = pd.NA
     serie["mes_data"] = pd.to_datetime(dict(year=serie["ano"], month=serie["mes"], day=1))
     return serie.sort_values(["trecho_id", "mes_data"]).reset_index(drop=True)
 
@@ -100,6 +163,22 @@ def build_feature_store_ml(serie: pd.DataFrame) -> pd.DataFrame:
 # exógena — ver docstring do módulo.
 _LIMITE_PREENCHIMENTO_ANOS = 2
 
+# Colunas de uso do solo real (MapBiomas, via `ingestion.bronze_uso_solo`/`silver_uso_solo`) —
+# ver ACHADO DE PESQUISA "uso do solo REAL" na docstring do módulo. As 4 macro-categorias mais
+# informativas para driver de qualidade da água entram como preditora; `pct_nao_vegetado_outro`
+# e `pct_nao_observado` (catch-all/ruído de classificação) ficam de fora — ver
+# `models.ml.features` para a lista de preditoras final.
+COLUNAS_USO_SOLO = ["pct_natural", "pct_agropecuaria", "pct_urbano_industrial", "pct_agua"]
+
+# Cobertura real do MapBiomas é 1985-2023 (`connectors.mapbiomas.ANO_MIN_COLECAO`/
+# `ANO_MAX_COLECAO`); a série de qualidade real vai de 1978 a 2024 — as únicas lacunas
+# possíveis são nas BORDAS: até 7 anos antes de 1985 (1978-1984) e alguns anos depois de 2023.
+# Uso do solo muda muito mais devagar ano a ano que vazão/chuva (não há "seca de uso do solo"),
+# então um limite maior que `_LIMITE_PREENCHIMENTO_ANOS` é defensável aqui — mas ainda LIMITADO
+# (não `ffill`/`bfill` sem limite), para não estender uma distribuição de 1985 silenciosamente
+# até 1940 se um trecho tiver uma lacuna maior que a esperada.
+_LIMITE_PREENCHIMENTO_USO_SOLO_ANOS = 10
+
 
 def build_feature_store_ml_anual() -> pd.DataFrame:
     """Feature store ANUAL para os modelos de ML — uma linha por (trecho, ano), sem repetição
@@ -110,10 +189,15 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
     vazão/chuva mensais agregadas ao ano inteiro — não passa por `serie_temporal_trecho_mes`
     (que existe para exibição mensal no dashboard, não para treino de modelo). Preenche
     lacunas curtas (até `_LIMITE_PREENCHIMENTO_ANOS` anos) de vazão/chuva por
-    forward-fill dentro do trecho — ver ACHADO DE AUDITORIA DE ML item 6 acima."""
+    forward-fill dentro do trecho — ver ACHADO DE AUDITORIA DE ML item 6 acima. Desde 2026-07,
+    junta também `silver.uso_solo` (MapBiomas real) — ver ACHADO DE PESQUISA "uso do solo
+    REAL" acima — com preenchimento em AMBAS as direções (`ffill`+`bfill`, limitado a
+    `_LIMITE_PREENCHIMENTO_USO_SOLO_ANOS`), porque a lacuna real fica nas BORDAS da série
+    (antes de 1985, depois de 2023), não no meio."""
     qualidade = qualidade_real_com_fallback_simulado()
     vazao = read_table(SILVER_DIR / "vazao_mensal")
     chuva = read_table(SILVER_DIR / "chuva_mensal")
+    uso_solo = read_table(SILVER_DIR / "uso_solo")
 
     vazao_anual = vazao.groupby(["trecho_id", "ano"], as_index=False).agg(
         vazao_m3s_medio=("vazao_m3s", "mean"), n_meses_vazao=("mes", "nunique")
@@ -124,6 +208,11 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
 
     tabela = qualidade.merge(vazao_anual, on=["trecho_id", "ano"], how="left")
     tabela = tabela.merge(chuva_anual, on=["trecho_id", "ano"], how="left")
+    if not uso_solo.empty:
+        tabela = tabela.merge(uso_solo[["trecho_id", "ano", *COLUNAS_USO_SOLO]], on=["trecho_id", "ano"], how="left")
+    else:
+        for coluna in COLUNAS_USO_SOLO:
+            tabela[coluna] = pd.NA
     tabela = tabela.sort_values(["trecho_id", "ano"]).reset_index(drop=True)
 
     for coluna in ("vazao_m3s_medio", "chuva_mm_media"):
@@ -131,6 +220,13 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
             lambda s: s.ffill(limit=_LIMITE_PREENCHIMENTO_ANOS)
         )
         tabela[f"{coluna}_imputado"] = tabela[coluna].isna() & preenchido.notna()
+        tabela[coluna] = preenchido
+
+    for coluna in COLUNAS_USO_SOLO:
+        preenchido = tabela.groupby("trecho_id")[coluna].transform(
+            lambda s: s.ffill(limit=_LIMITE_PREENCHIMENTO_USO_SOLO_ANOS).bfill(limit=_LIMITE_PREENCHIMENTO_USO_SOLO_ANOS)
+        )
+        tabela[f"{coluna}_imputado"] = tabela[coluna].isna() & pd.notna(preenchido)
         tabela[coluna] = preenchido
 
     for coluna in ("iqa", "od_mg_l"):
@@ -142,6 +238,71 @@ def build_feature_store_ml_anual() -> pd.DataFrame:
     return tabela
 
 
+# Nomes de coluna estáveis (independentes do texto exato do `Parâmetro` na planilha fonte) —
+# mesmo padrão de `silver_sensoriamento._ID_REGIAO_PARA_TRECHO`: mapa explícito em vez de
+# normalizar o texto às cegas, porque "Turbidez" aqui e a `turbidez_ntu` de outro lugar do
+# pipeline precisam continuar claramente distintas (esta é sensoriamento remoto, não medição
+# in situ da CETESB) — daí o sufixo `_sensoriamento` onde poderia haver ambiguidade.
+_PARAMETRO_SENSORIAMENTO_PARA_COLUNA = {
+    "NDVI (Mata Ciliar)": "ndvi_mata_ciliar",
+    "Turbidez": "turbidez_ntu_sensoriamento",
+    "Clorofila-a": "clorofila_a_mg_m3",
+    "Temperatura da Superfície": "temperatura_superficie_c",
+    "Sólidos Suspensos Totais": "solidos_suspensos_totais_mg_l_sensoriamento",
+    "Nível da Água Altimetria": "nivel_agua_m",
+}
+
+
+def _normalizar_nome_parametro(parametro: str) -> str:
+    """Fallback para um `Parâmetro` sem entrada em `_PARAMETRO_SENSORIAMENTO_PARA_COLUNA` —
+    slug ascii/snake_case, para a coluna existir (e ser óbvia) em vez de a linha ser
+    descartada silenciosamente."""
+    import unicodedata
+
+    sem_acento = unicodedata.normalize("NFKD", parametro).encode("ascii", "ignore").decode("ascii")
+    return "_".join(filter(None, "".join(c if c.isalnum() else " " for c in sem_acento).lower().split()))
+
+
+def build_indicadores_sensoriamento_anual() -> pd.DataFrame:
+    """Agrega `silver.sensoriamento` (uma linha por ponto/data/parâmetro) para uma linha por
+    (trecho, ano) — ver ACHADO DE PESQUISA na docstring do módulo para o porquê desta tabela
+    ficar separada de `feature_store_ml_anual` por enquanto (zero anos em comum com o
+    histórico real de qualidade da água).
+
+    Retorna DataFrame vazio se `silver.sensoriamento` ainda não foi materializada (mesmo
+    contrato de `io_delta.read_table` para tabela ausente)."""
+    sensoriamento = read_table(SILVER_DIR / "sensoriamento")
+    if sensoriamento.empty:
+        return sensoriamento
+
+    tabela = sensoriamento.copy()
+    tabela["ano"] = pd.to_datetime(tabela["data_coleta"]).dt.year
+    tabela["coluna"] = tabela["parametro"].map(_PARAMETRO_SENSORIAMENTO_PARA_COLUNA)
+
+    sem_mapeamento = tabela["coluna"].isna() & tabela["parametro"].notna()
+    if sem_mapeamento.any():
+        desconhecidos = sorted(tabela.loc[sem_mapeamento, "parametro"].unique())
+        logger.warning(
+            "Parâmetro(s) de sensoriamento sem entrada em _PARAMETRO_SENSORIAMENTO_PARA_COLUNA: "
+            "%s — usando nome normalizado (slug) como fallback, em vez de descartar a linha.",
+            desconhecidos,
+        )
+        tabela.loc[sem_mapeamento, "coluna"] = tabela.loc[sem_mapeamento, "parametro"].map(_normalizar_nome_parametro)
+
+    agregado = (
+        tabela.groupby(["trecho_id", "ano", "coluna"])["valor"]
+        .mean()
+        .unstack("coluna")
+        .reset_index()
+    )
+    agregado.columns.name = None
+
+    contagem = (
+        tabela.groupby(["trecho_id", "ano"]).size().rename("n_observacoes_sensoriamento").reset_index()
+    )
+    return agregado.merge(contagem, on=["trecho_id", "ano"], how="left")
+
+
 def build_estado_inicial_abm(serie: pd.DataFrame) -> pd.DataFrame:
     """Snapshot mais recente (com qualidade da água disponível) por trecho, para inicializar o ABM."""
     valido = serie.dropna(subset=["iqa"]).sort_values("mes_data")
@@ -150,7 +311,7 @@ def build_estado_inicial_abm(serie: pd.DataFrame) -> pd.DataFrame:
 
 
 def run() -> dict[str, pd.DataFrame]:
-    """Constrói e grava as quatro tabelas Gold, nessa ordem de dependência."""
+    """Constrói e grava as cinco tabelas Gold, nessa ordem de dependência."""
     serie = build_serie_temporal_trecho_mes()
     write_table(GOLD_DIR / "serie_temporal_trecho_mes", serie, partition_by=["trecho_id"])
 
@@ -163,11 +324,18 @@ def run() -> dict[str, pd.DataFrame]:
     estado_inicial = build_estado_inicial_abm(serie)
     write_table(GOLD_DIR / "estado_inicial_abm", estado_inicial)
 
+    sensoriamento_anual = build_indicadores_sensoriamento_anual()
+    if not sensoriamento_anual.empty:
+        write_table(GOLD_DIR / "sensoriamento_trecho_ano", sensoriamento_anual, partition_by=["trecho_id"])
+    else:
+        logger.info("gold.sensoriamento_trecho_ano não gravada: silver.sensoriamento ainda vazia.")
+
     return {
         "serie_temporal_trecho_mes": serie,
         "feature_store_ml": features,
         "feature_store_ml_anual": features_anual,
         "estado_inicial_abm": estado_inicial,
+        "sensoriamento_trecho_ano": sensoriamento_anual,
     }
 
 

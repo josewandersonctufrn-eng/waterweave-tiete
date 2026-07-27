@@ -29,9 +29,16 @@ streamlit-folium>=0.23
 fpdf2>=2.8  # export em PDF do Relatório Automático (pure-Python, sem binário de sistema)
 pyphen>=0.14  # hifenização automática do texto justificado dos PDFs (pt_BR/en/fr/es, pure-Python)
 
-# As dependências abaixo são só para desenvolvimento LOCAL (orquestração e
-# conector futuro do MapBiomas) — deliberadamente fora deste arquivo para
-# manter o build do Streamlit Community Cloud rápido e enxuto. Instale à
-# parte quando for trabalhar em `orchestration/` ou `connectors/mapbiomas.py`:
+# As dependências abaixo são só para desenvolvimento LOCAL (orquestração e os conectores que
+# usam Google Earth Engine ou a Copernicus Climate Data Store) — deliberadamente fora deste
+# arquivo para manter o build do Streamlit Community Cloud rápido e enxuto. Instale à parte
+# quando for trabalhar em `orchestration/`, `connectors/mapbiomas.py` (uso do solo) ou
+# `connectors/sensoriamento_historico.py` (NDVI/temperatura de superfície histórico via
+# Landsat — ver docstring do módulo para o passo `earthengine authenticate`, obrigatório e
+# interativo, antes do primeiro uso), ou `connectors/era5_cmip6.py` (clima real ERA5/CMIP6 via
+# CDS — ver docstring do módulo para o token pessoal `WATERWEAVE_CDS_API_KEY`):
 #   apache-airflow>=2.9
 #   earthengine-api>=1.1
+#   cdsapi>=0.7.7
+#   xarray>=2024.1  # abre os NetCDF baixados da CDS em connectors/era5_cmip6.py
+#   netCDF4>=1.6    # engine de leitura NetCDF usada pelo xarray.open_dataset acima

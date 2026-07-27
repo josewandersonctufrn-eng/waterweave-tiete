@@ -7,8 +7,17 @@
 
 pytest>=8.0
 
-# ingestion/connectors/mapbiomas.py importa `ee` no nível do módulo — precisa estar instalado
-# para os testes (test_mapbiomas.py, test_bronze_uso_solo.py) sequer COLETAREM, mesmo eles
+# ingestion/connectors/mapbiomas.py e connectors/sensoriamento_historico.py importam `ee` no
+# nível do módulo — precisa estar instalado para os testes (test_mapbiomas.py,
+# test_bronze_uso_solo.py, test_sensoriamento_historico.py) sequer COLETAREM, mesmo eles
 # mockando toda chamada de rede/autenticação real (ver docstring desses arquivos). Não precisa
 # de `earthengine authenticate` em CI — os testes nunca chamam `ee.Initialize` de verdade.
 earthengine-api>=1.1
+
+# ingestion/connectors/era5_cmip6.py importa `cdsapi`/`xarray` no nível do módulo — mesmo
+# raciocínio acima, para test_era5_cmip6.py coletar e rodar em CI (que mocka toda chamada de
+# rede/token real, ver docstring do módulo; não precisa de token CDS em CI). `netCDF4` é a
+# engine que `xarray.open_dataset` usa por baixo para ler os arquivos baixados da CDS.
+cdsapi>=0.7.7
+xarray>=2024.1
+netCDF4>=1.6

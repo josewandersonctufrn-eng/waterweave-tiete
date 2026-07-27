@@ -13,6 +13,44 @@ daquele módulo. Aqui ele é convertido para m³/s por um fator calibrado uma
 única vez por trecho: roda-se o balanço sobre toda a chuva histórica do
 trecho e ancora-se a média do índice resultante na vazão média REAL
 observada (`gold.serie_temporal_trecho_mes`) no mesmo período.
+
+ACHADO DE PESQUISA (2026-07, conectividade espacial entre trechos): até esta correção, cada
+trecho era simulado de forma INDEPENDENTE — uma redução de poluição decidida pelos agentes do
+Alto Tietê nunca aparecia no Médio/Baixo Tietê na simulação, mesmo o rio sendo contínuo de
+verdade (Alto deságua no Médio, que deságua no Baixo). Isso é uma lacuna real para uma
+ferramenta cujo propósito é deixar stakeholders "testar propostas de gestão... para encontrar
+coletivamente caminhos mais sustentáveis" — se o esforço de limpeza de um trecho nunca
+beneficia o de jusante na simulação, o trade-off espacial entre trechos (o cerne de decisão de
+bacia hidrográfica) fica invisível.
+
+Corrigido só para CARGA POLUIDORA (não para vazão — ver ressalva abaixo), propagada de montante
+para jusante DENTRO do mesmo passo mensal (`models.abm.model.RioTieteModel.step` agora itera
+os trechos em `ordem_hidrologica`, não na ordem arbitrária que o usuário passou):
+`executar_passo` retorna `carga_total_kg_dia` (a carga que efetivamente entrou no
+Streeter-Phelps daquele trecho); o chamador calcula o DESVIO em relação à carga-base histórica
+do trecho (`carga_base_trecho_kg_dia`) e propaga `FRACAO_CARGA_PROPAGADA_MONTANTE` desse desvio
+como `carga_delta_montante_kg_dia` do próximo trecho a jusante.
+
+Por que o DESVIO, não a carga bruta: `carga_base_trecho_kg_dia` de cada trecho já é
+back-calculada do HISTÓRICO REAL daquele trecho especificamente — que, na realidade, já reflete
+contribuições de montante (a estação de monitoramento do Médio Tietê já mede água que passou
+pelo Alto). Propagar a carga bruta do Alto por cima disso contaria a mesma poluição duas vezes.
+Propagar só o DESVIO (quanto a mais ou a menos o Alto está mandando, em relação ao que
+historicamente já mandava) mantém o cenário "atual" (sem intervenção dos agentes) praticamente
+idêntico ao comportamento anterior — só cenários com policy real (agentes mudando fatores de
+carga) produzem propagação visível, que é exatamente o caso de uso que faltava.
+
+RESSALVA (vazão NÃO propagada, de propósito): vazão de cada trecho continua calibrada
+independentemente a partir da própria vazão histórica REAL do trecho (mesmo racional acima —
+já reflete acumulação de montante na magnitude média). Propagar ANOMALIAS de vazão mês a mês
+entre trechos (ex.: "Alto teve um mês seco, Médio deveria sentir isso") é uma extensão futura
+não feita aqui — motivo: exigiria decompor a vazão simulada em "sinal local" vs. "herdado de
+montante" sem contar a mesma água duas vezes, mais delicado que o caso da carga poluidora.
+
+RESSALVA (sem defasagem de trânsito): a propagação acontece dentro do MESMO mês simulado, sem
+modelar o tempo de viagem da água entre trechos (que na prática deve ficar em dias a poucas
+semanas para as distâncias de `config.TRECHOS`, dentro do passo mensal já grosseiro do modelo) —
+simplificação documentada, não um erro de trânsito ignorado por descuido.
 """
 from __future__ import annotations
 
@@ -21,9 +59,24 @@ from functools import lru_cache
 
 import pandas as pd
 
-from waterweave.config import GOLD_DIR
+from waterweave.config import GOLD_DIR, TRECHOS
 from waterweave.io_delta import read_table
 from waterweave.models.biofisico import balanco_hidrico, parametros_estendidos, qualidade_agua
+from waterweave.transform.gold_features import COLUNAS_USO_SOLO
+
+# Fração do DESVIO de carga poluidora (em relação à carga-base histórica do trecho de
+# montante) que chega ao trecho de jusante — ver ACHADO DE PESQUISA "conectividade espacial"
+# na docstring do módulo. 0.5 é uma aproximação deliberada: nem toda a carga excedente chega
+# intacta (autodepuração ao longo do trajeto, diluição por tributários não modelados), mas
+# ignorar completamente (0.0, comportamento anterior) subestima o efeito de política a jusante.
+FRACAO_CARGA_PROPAGADA_MONTANTE = 0.5
+
+
+def ordem_hidrologica(trechos: list[str]) -> list[str]:
+    """Ordena `trechos` de MONTANTE para JUSANTE, pela distância acumulada da nascente
+    (`config.TRECHOS[...].km_aproximado`) — usada por `models.abm.model.RioTieteModel.step`
+    para propagar carga poluidora na ordem certa (ver ACHADO DE PESQUISA acima)."""
+    return sorted(trechos, key=lambda trecho_id: TRECHOS[trecho_id].km_aproximado)
 
 # Distância típica entre um lançamento de efluente e o ponto de monitoramento
 # dentro do trecho (km) — muito menor que o comprimento total do trecho
@@ -71,6 +124,9 @@ class PassoHibrido:
     mes_data: pd.Timestamp
     estado_hidrologico: balanco_hidrico.EstadoHidrologico
     vazao_simulada_m3s: float
+    carga_total_kg_dia: float  # carga que efetivamente entrou no Streeter-Phelps deste passo
+    # (fatores dos agentes + `carga_delta_montante_kg_dia` recebido de jusante) — ver ACHADO DE
+    # PESQUISA "conectividade espacial" na docstring do módulo.
     od_simulado_mg_l: float
     dbo_simulado_mg_l: float
     iqa_simulado: float
@@ -96,7 +152,7 @@ def _fator_conversao_indice_para_vazao(trecho_id: str) -> float:
     estado = balanco_hidrico.estado_inicial(trecho_id)
     indices = []
     for _, linha in historico.iterrows():
-        estado = balanco_hidrico.simular_passo_mensal(estado, linha["chuva_mm_media"], linha.get("uso_solo"))
+        estado = balanco_hidrico.simular_passo_mensal(estado, linha["chuva_mm_media"], uso_solo_da_linha(linha))
         indices.append(estado.indice_escoamento_mm)
 
     indice_medio = sum(indices) / len(indices)
@@ -160,25 +216,51 @@ def estado_hidrologico_inicial(trecho_id: str) -> balanco_hidrico.EstadoHidrolog
     return balanco_hidrico.estado_inicial(trecho_id)
 
 
+def uso_solo_da_linha(linha: pd.Series) -> str | dict[str, float] | None:
+    """Extrai o uso do solo de uma linha de `gold.serie_temporal_trecho_mes`: prioriza os
+    percentuais REAIS do MapBiomas (`transform.gold_features.COLUNAS_USO_SOLO`) sobre a classe
+    simulada de texto livre (coluna `uso_solo`) — mesma prioridade real > simulado já usada em
+    `transform.gold_features.qualidade_real_com_fallback_simulado`, aplicada aqui ao uso do
+    solo. Cai para a classe simulada nos anos fora da cobertura MapBiomas (antes de 1985/depois
+    de 2023 — ver ACHADO DE PESQUISA "uso do solo REAL" em `transform.gold_features`).
+    `balanco_hidrico.simular_passo_mensal` já aceita as duas formas de retorno."""
+    percentuais = {coluna: linha.get(coluna) for coluna in COLUNAS_USO_SOLO}
+    tem_dado_real = any(valor is not None and valor == valor for valor in percentuais.values())
+    if tem_dado_real:
+        return percentuais
+    classe_simulada = linha.get("uso_solo")
+    return classe_simulada if isinstance(classe_simulada, str) else None
+
+
 def executar_passo(
     trecho_id: str,
     mes_data: pd.Timestamp,
     estado_hidrologico_anterior: balanco_hidrico.EstadoHidrologico,
     parametros_agentes: ParametrosAgentes,
     chuva_mm: float,
-    uso_solo: str | None,
+    uso_solo: str | dict[str, float] | None,
     fator_clima: float = 1.0,
+    carga_delta_montante_kg_dia: float = 0.0,
 ) -> PassoHibrido:
     """Executa um passo mensal completo (biofísico -> qualidade da água) para um trecho,
-    sob os parâmetros de decisão vigentes dos agentes."""
+    sob os parâmetros de decisão vigentes dos agentes. `uso_solo` aceita string simulada
+    (legado) ou dict de percentuais reais (MapBiomas) — ver `uso_solo_da_linha` e ACHADO DE
+    PESQUISA em `models.biofisico.balanco_hidrico`.
+
+    `carga_delta_montante_kg_dia`: desvio de carga poluidora recebido do trecho de MONTANTE
+    (positivo = montante está poluindo mais que seu histórico; negativo = menos) — ver ACHADO
+    DE PESQUISA "conectividade espacial" na docstring do módulo. Default 0.0 preserva o
+    comportamento anterior (trecho isolado) para quem chamar sem esse parâmetro."""
     novo_estado_hidrologico = balanco_hidrico.simular_passo_mensal(estado_hidrologico_anterior, chuva_mm, uso_solo)
     fator = _fator_conversao_indice_para_vazao(trecho_id)
     vazao_simulada = max(0.01, novo_estado_hidrologico.indice_escoamento_mm * fator)
 
     carga_base = carga_base_trecho_kg_dia(trecho_id)
-    carga_total = (
+    carga_total = max(
+        0.0,
         parametros_agentes.fator_carga_industria * FRACAO_CARGA_INDUSTRIAL * carga_base
         + parametros_agentes.fator_carga_difusa * FRACAO_CARGA_DIFUSA * carga_base
+        + carga_delta_montante_kg_dia,
     )
     vazao_diluicao = vazao_simulada * parametros_agentes.fator_outorga
 
@@ -204,6 +286,7 @@ def executar_passo(
         mes_data=mes_data,
         estado_hidrologico=novo_estado_hidrologico,
         vazao_simulada_m3s=vazao_simulada,
+        carga_total_kg_dia=carga_total,
         od_simulado_mg_l=od,
         dbo_simulado_mg_l=dbo,
         iqa_simulado=iqa,

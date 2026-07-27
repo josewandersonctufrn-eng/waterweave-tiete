@@ -41,7 +41,28 @@ $env:WATERWEAVE_EE_PROJECT = "seu-project-id"   # ID de um projeto Google Cloud 
 ```
 
 Sem essa variável definida, `bronze_uso_solo.py` levanta um erro claro (não
-o erro genérico do Earth Engine) — ver `config.EARTH_ENGINE_PROJECT`.
+o erro genérico do Earth Engine) — ver `config.EARTH_ENGINE_PROJECT`. O mesmo
+padrão (`fetch_series_historica`, NDVI/temperatura de superfície/turbidez-proxy
+histórico via Landsat) vale para `ingestion/connectors/sensoriamento_historico.py`.
+
+## Clima real (ERA5/CMIP6 / Copernicus Climate Data Store)
+
+`ingestion/connectors/era5_cmip6.py` busca reanálise histórica ERA5
+(`fetch_reanalysis`) e projeções futuras CMIP6 por cenário SSP
+(`fetch_projection`) via a Copernicus Climate Data Store. Requer, uma única
+vez: criar uma conta gratuita em <https://cds.climate.copernicus.eu> e copiar
+o token pessoal em <https://cds.climate.copernicus.eu/how-to-api>. A cada
+sessão de terminal onde for usar este conector:
+
+```powershell
+pip install cdsapi xarray netCDF4   # não estão em requirements.txt (mesmo raciocínio do earthengine-api)
+$env:WATERWEAVE_CDS_API_KEY = "seu-token-pessoal"
+```
+
+Sem essa variável definida, `era5_cmip6.py` levanta um erro claro — ver
+`config.CDS_API_KEY`. Ainda não está religado a `models.abm.scenarios`/
+`models.abm.model` (ver ACHADO DE PESQUISA na docstring do módulo) — hoje é
+um conector funcional e testado, mas isolado do resto do pipeline.
 
 ## Testes
 
@@ -123,7 +144,7 @@ src/waterweave/
 │   ├── bronze_estacoes.py
 │   ├── bronze_qualidade_solo.py
 │   ├── bronze_sensoriamento.py
-│   ├── connectors/              # ana_snirh.py real e testado; cetesb/mapbiomas stub (ver docstrings); era5_cmip6 stub
+│   ├── connectors/              # ana_snirh.py, mapbiomas.py, sensoriamento_historico.py e era5_cmip6.py reais e testados; cetesb ainda stub (ver docstring)
 │   └── monthly_job.py            # orquestrador real (Bronze -> conectores -> Silver -> Gold)
 ├── transform/                   # Camadas Silver e Gold — implementado
 │   ├── silver_estacoes.py

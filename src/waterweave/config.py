@@ -111,3 +111,29 @@ PIPELINE_CONTROL_FILE = PROJECT_ROOT / "data" / "_pipeline_runs.json"
 # levanta um erro claro nesse caso (ver `fetch_uso_solo_por_trecho`), em vez
 # do erro genérico do Earth Engine sobre projeto ausente.
 EARTH_ENGINE_PROJECT = os.environ.get("WATERWEAVE_EE_PROJECT")
+
+# ---------------------------------------------------------------------------
+# Copernicus Climate Data Store (ERA5 reanálise + CMIP6 projeções — item 4 do
+# roadmap de pesquisa, ver ingestion.connectors.era5_cmip6)
+# ---------------------------------------------------------------------------
+# Token de acesso pessoal da CDS (registro gratuito em https://cds.climate.copernicus.eu,
+# depois copiar o valor de "key" em https://cds.climate.copernicus.eu/how-to-api). O padrão
+# oficial da biblioteca `cdsapi` é gravar isso em `~/.cdsapirc`; aqui lemos de variável de
+# ambiente (mesmo raciocínio de `EARTH_ENGINE_PROJECT`: consistente com o resto do projeto, não
+# obriga a mexer em arquivos de configuração fora do repo) e passamos explicitamente para
+# `cdsapi.Client(url=..., key=...)`, que aceita essa forma tão bem quanto o arquivo:
+#   PowerShell:  $env:WATERWEAVE_CDS_API_KEY = "seu-token-pessoal"
+#   bash:        export WATERWEAVE_CDS_API_KEY=seu-token-pessoal
+# Fica `None` se a variável não estiver definida — `connectors.era5_cmip6` levanta um erro claro
+# nesse caso, no mesmo padrão de `EARTH_ENGINE_PROJECT`/`connectors.mapbiomas`.
+CDS_API_URL = "https://cds.climate.copernicus.eu/api"
+CDS_API_KEY = os.environ.get("WATERWEAVE_CDS_API_KEY")
+
+# Bounding box aproximado da bacia do Tietê (todos os 3 trechos, com margem), no formato
+# (lat_min, lon_min, lat_max, lon_max) — cobre da nascente em Salesópolis (23.53°S, 45.84°W) até
+# a foz em Itapura/Rio Paraná (20.67°S, 51.45°W), mesmos pontos de referência de
+# `connectors.sensoriamento_historico.PONTOS_MONITORAMENTO`. Usado como área de consulta do
+# ERA5/CMIP6 (clima é um sinal de escala muito maior que o buffer de 300m usado no sensoriamento
+# óptico — não faz sentido, nem é preciso o suficiente na resolução do ERA5 (~28km) para pedir
+# recorte por trecho individual).
+BBOX_BACIA_TIETE = (-24.0, -52.0, -20.0, -45.5)

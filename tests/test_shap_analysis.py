@@ -18,7 +18,10 @@ def test_shap_drivers_nao_usa_nenhuma_coluna_de_lag_do_alvo(gold_df_sintetico):
     shap_values, X_teste, importancia = explicar_modelo_drivers(gold, "iqa", "alto_tiete")
 
     assert not any("lag" in col or "media_movel" in col for col in X_teste.columns)
-    assert set(X_teste.columns) <= {"ano", "vazao_m3s_medio", "chuva_mm_media"}
+    assert set(X_teste.columns) <= {
+        "ano", "vazao_m3s_medio", "chuva_mm_media",
+        "pct_natural", "pct_agropecuaria", "pct_urbano_industrial", "pct_agua",
+    }
     assert shap_values.shape[0] == len(X_teste)
     assert shap_values.shape[1] == len(X_teste.columns)
     assert set(importancia.index) == set(X_teste.columns)

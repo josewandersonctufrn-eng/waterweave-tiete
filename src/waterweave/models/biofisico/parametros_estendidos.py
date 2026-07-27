@@ -142,16 +142,6 @@ def simular_parametros_estendidos(
     )
     metais_toxicos = max(0.0, min(100.0, metais_toxicos))
 
-    # Índice biótico (macroinvertebrados/peixes sensíveis): proxy ilustrativo —
-    # não há dado real de biomonitoramento no projeto — combinando OD (mais
-    # peso), turbidez e toxicidade, seguindo a lógica de índices bióticos reais
-    # (tipo BMWP simplificado): mais OD e menos turbidez/toxinas -> mais vida
-    # sensível presente.
-    od_normalizado = max(0.0, min(100.0, (od_simulado_mg_l / 8.0) * 100.0))
-    turbidez_normalizada = max(0.0, min(100.0, (turbidez / 60.0) * 100.0))
-    indice_biotico = 0.5 * od_normalizado + 0.25 * (100.0 - turbidez_normalizada) + 0.25 * (100.0 - metais_toxicos)
-    indice_biotico = max(0.0, min(100.0, indice_biotico))
-
     return ParametrosEstendidos(
         turbidez_ntu=turbidez,
         solidos_totais_mg_l=solidos_totais,
@@ -161,5 +151,22 @@ def simular_parametros_estendidos(
         nitrogenio_mg_l=nitrogenio,
         e_coli_nmp_100ml=e_coli,
         metais_toxicos_indice=metais_toxicos,
-        indice_biotico=indice_biotico,
+        indice_biotico=indice_biotico(od_simulado_mg_l, turbidez, metais_toxicos),
     )
+
+
+def indice_biotico(od_mg_l: float, turbidez_ntu: float, metais_toxicos_indice: float) -> float:
+    """Índice biótico (macroinvertebrados/peixes sensíveis, 0-100): proxy ilustrativo — não há
+    dado real de biomonitoramento no projeto — combinando OD (mais peso), turbidez e toxicidade,
+    seguindo a lógica de índices bióticos reais (tipo BMWP simplificado): mais OD e menos
+    turbidez/toxinas -> mais vida sensível presente.
+
+    Extraída de `simular_parametros_estendidos` (2026-07, ver ACHADO DE PESQUISA "serviços
+    ecossistêmicos" em `models.servicos_ecossistemicos`) para ser reaproveitada como base do
+    indicador de SUPORTE À BIODIVERSIDADE — mesma fórmula, sem duplicação, agora chamável fora
+    do fluxo completo de `simular_parametros_estendidos` (que exige todos os outros parâmetros
+    biofísicos calculados antes)."""
+    od_normalizado = max(0.0, min(100.0, (od_mg_l / 8.0) * 100.0))
+    turbidez_normalizada = max(0.0, min(100.0, (turbidez_ntu / 60.0) * 100.0))
+    valor = 0.5 * od_normalizado + 0.25 * (100.0 - turbidez_normalizada) + 0.25 * (100.0 - metais_toxicos_indice)
+    return max(0.0, min(100.0, valor))

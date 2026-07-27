@@ -7,10 +7,22 @@ parâmetros de decisão (outorga, carga industrial, carga difusa); (2)
 do mês corrente sob esses parâmetros já atualizados, produzindo o novo
 estado que os agentes vão observar no próximo passo.
 
-Simplificação assumida: cada trecho é simulado de forma independente, sem
-propagar vazão/carga de montante para jusante (o Tietê real é um rio
-contínuo — Alto deságua no Médio, que deságua no Baixo). Encadear os três
-trechos é uma extensão natural, não implementada aqui.
+ACHADO DE PESQUISA (2026-07, conectividade espacial entre trechos): `step` agora processa os
+trechos em `hybrid_bridge.ordem_hidrologica` (montante -> jusante), propagando o DESVIO de
+carga poluidora de cada trecho (em relação à própria carga-base histórica) para o próximo a
+jusante, dentro do mesmo mês simulado — ver ACHADO DE PESQUISA "conectividade espacial" em
+`models.hybrid_bridge` para o racional completo (por que só carga, não vazão; por que o
+desvio, não a carga bruta; por que sem defasagem de trânsito). Vazão continua calibrada de
+forma independente por trecho — RESSALVA ainda válida: o rio real é contínuo, e a vazão
+acumulada de montante para jusante não é modelada explicitamente, só a carga poluidora.
+
+ACHADO DE PESQUISA (2026-07, uso do solo REAL no ABM): `self._uso_solo` (usado a cada `step`
+via `hybrid_bridge.executar_passo`) agora prioriza os percentuais reais do MapBiomas
+(`_uso_solo_recente`/`hybrid_bridge.uso_solo_da_linha`) sobre a classe simulada de texto livre
+que era a única fonte antes desta correção — ver ACHADO DE PESQUISA "uso do solo REAL" em
+`transform.gold_features`. Continua sendo o uso do solo mais recente disponível, fixo para
+toda a simulação (não muda passo a passo) — dinamizar isso ano a ano dentro de uma rodada do
+ABM é uma extensão futura, não feita aqui.
 """
 from __future__ import annotations
 
@@ -39,9 +51,15 @@ def _climatologia_mensal(trecho_id: str) -> pd.Series:
     return historico.groupby("mes")["chuva_mm_media"].mean()
 
 
-def _uso_solo_recente(trecho_id: str) -> str | None:
-    historico = _serie_trecho(trecho_id).dropna(subset=["uso_solo"]).sort_values("mes_data")
-    return None if historico.empty else historico["uso_solo"].iloc[-1]
+def _uso_solo_recente(trecho_id: str) -> str | dict[str, float] | None:
+    """Uso do solo mais recente do trecho — prioriza os percentuais REAIS do MapBiomas sobre a
+    classe simulada de texto livre (ver `hybrid_bridge.uso_solo_da_linha`, ACHADO DE PESQUISA
+    "uso do solo REAL" em `transform.gold_features`). Antes desta correção (2026-07), esta
+    função só olhava a coluna `uso_solo` simulada, mesmo quando `pct_natural`/etc. reais já
+    estavam disponíveis em `gold.serie_temporal_trecho_mes` para o mesmo trecho/ano."""
+    colunas_uso_solo = ["uso_solo", *hybrid_bridge.COLUNAS_USO_SOLO]
+    historico = _serie_trecho(trecho_id).dropna(subset=colunas_uso_solo, how="all").sort_values("mes_data")
+    return None if historico.empty else hybrid_bridge.uso_solo_da_linha(historico.iloc[-1])
 
 
 def _vazao_media_historica(trecho_id: str) -> float:
@@ -67,6 +85,15 @@ class RioTieteModel(mesa.Model):
     ):
         super().__init__(rng=seed)
         self.trechos = trechos
+        # Ordem MONTANTE -> JUSANTE (`config.TRECHOS[...].km_aproximado`) — usada em `step` para
+        # propagar carga poluidora na direção certa (ver ACHADO DE PESQUISA "conectividade
+        # espacial" na docstring do módulo). `_trecho_jusante[t]` é `None` para o trecho mais a
+        # jusante da lista (nada recebe a carga dele dentro desta simulação).
+        self._ordem_hidrologica = hybrid_bridge.ordem_hidrologica(trechos)
+        self._trecho_jusante: dict[str, str | None] = {
+            t: (self._ordem_hidrologica[i + 1] if i + 1 < len(self._ordem_hidrologica) else None)
+            for i, t in enumerate(self._ordem_hidrologica)
+        }
         self.cenario_id = cenario_id
         self.fator_clima = fator_clima
         self.piso_fator_outorga = piso_fator_outorga
@@ -108,7 +135,13 @@ class RioTieteModel(mesa.Model):
         self.mes_atual = self.mes_atual + pd.DateOffset(months=1)
         mes_calendario = self.mes_atual.month
 
-        for trecho_id in self.trechos:
+        # Desvio de carga poluidora a propagar para cada trecho, recebido do seu vizinho de
+        # montante NESTE mês — populado trecho a trecho conforme a ordem hidrológica avança
+        # (ver ACHADO DE PESQUISA "conectividade espacial" na docstring do módulo). Reiniciada
+        # a cada `step`: a propagação é só dentro do mesmo mês, sem memória entre meses.
+        carga_delta_recebida: dict[str, float] = {}
+
+        for trecho_id in self._ordem_hidrologica:
             agentes = self.agentes_por_trecho[trecho_id]
             agentes["comite"].step()
             agentes["poder_publico"].step()
@@ -132,10 +165,16 @@ class RioTieteModel(mesa.Model):
                 chuva_mes,
                 self._uso_solo[trecho_id],
                 fator_clima=self.fator_clima,
+                carga_delta_montante_kg_dia=carga_delta_recebida.get(trecho_id, 0.0),
             )
             self.estado_hidrologico_por_trecho[trecho_id] = passo.estado_hidrologico
             self.ultimo_passo_por_trecho[trecho_id] = passo
             self.historico.append(passo)
+
+            trecho_jusante = self._trecho_jusante[trecho_id]
+            if trecho_jusante is not None:
+                desvio_carga = passo.carga_total_kg_dia - hybrid_bridge.carga_base_trecho_kg_dia(trecho_id)
+                carga_delta_recebida[trecho_jusante] = hybrid_bridge.FRACAO_CARGA_PROPAGADA_MONTANTE * desvio_carga
 
     def run_horizonte(self, n_meses: int) -> None:
         """Roda o modelo por `n_meses` passos consecutivos."""

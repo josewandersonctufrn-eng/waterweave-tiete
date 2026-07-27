@@ -45,7 +45,15 @@ def gold_sintetico(monkeypatch):
     vazao = _tabela_mensal("alto_tiete", anos_vazao, "vazao_m3s", 10.0)
     chuva = _tabela_mensal("alto_tiete", list(range(2011, 2021)), "altura_mm", 100.0)
 
-    tabelas = {"qualidade_cetesb": real, "qualidade": simulado, "vazao_mensal": vazao, "chuva_mensal": chuva}
+    # Vazia de propósito: estes testes cobrem vazamento de granularidade/fallback/imputação de
+    # vazão, não uso do solo — `build_feature_store_ml_anual` trata `uso_solo` vazio preenchendo
+    # as colunas `pct_*` com NA (ver `else` no bloco de merge), sem afetar o resto da tabela.
+    uso_solo = pd.DataFrame()
+
+    tabelas = {
+        "qualidade_cetesb": real, "qualidade": simulado,
+        "vazao_mensal": vazao, "chuva_mensal": chuva, "uso_solo": uso_solo,
+    }
     monkeypatch.setattr(gold_features, "read_table", lambda path: tabelas[path.name])
 
 

@@ -29,6 +29,10 @@ def _gold_df_sintetico() -> pd.DataFrame:
                     "ano": ano,
                     "vazao_m3s_medio": None if (trecho_id == "alto_tiete" and i == 5) else 10.0 + i,
                     "chuva_mm_media": 100.0 + i,
+                    "pct_natural": 20.0,
+                    "pct_agropecuaria": 50.0,
+                    "pct_urbano_industrial": 25.0,
+                    "pct_agua": 5.0,
                     "iqa": 60.0 + i,
                     "iqa_lag1a": 59.0 + i,
                     "iqa_lag2a": 58.0 + i,
@@ -79,7 +83,10 @@ def test_matriz_drivers_nao_tem_lags_do_alvo():
     gold = _gold_df_sintetico()
     X, y = montar_matriz_features_drivers_por_trecho(gold, "iqa", "alto_tiete")
     assert not any("lag" in col or "media_movel" in col for col in X.columns)
-    assert set(X.columns) <= {"ano", "vazao_m3s_medio", "chuva_mm_media"}
+    assert set(X.columns) <= {
+        "ano", "vazao_m3s_medio", "chuva_mm_media",
+        "pct_natural", "pct_agropecuaria", "pct_urbano_industrial", "pct_agua",
+    }
     assert len(X) == len(y)
 
 

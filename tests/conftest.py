@@ -38,6 +38,10 @@ def gold_df_sintetico():
                 "od_mg_l": od,
                 "vazao_m3s_medio": 50 + rng.normal(0, 5, n_anos),
                 "chuva_mm_media": 120 + rng.normal(0, 10, n_anos),
+                "pct_natural": 20.0,
+                "pct_agropecuaria": 50.0,
+                "pct_urbano_industrial": 25.0,
+                "pct_agua": 5.0,
                 # metade simulada, metade observada, real concentrada nos anos mais recentes —
                 # reflete o padrão de verdade (CETESB real começa em 1978, simulado cobre o
                 # resto), necessário para exercitar o fallback do item 2.

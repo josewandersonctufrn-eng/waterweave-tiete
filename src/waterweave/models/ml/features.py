@@ -28,6 +28,17 @@ estrutural, não sinal. `TRECHOS_SEM_VAZAO_CONFIAVEL` remove essa preditora
 só para os trechos marcados — `chuva_mm_media` não tem esse problema (0% de
 nulos, série internamente consistente nos 3 trechos) e continua em todos.
 
+ACHADO DE PESQUISA (2026-07, uso do solo REAL como preditora — ver ACHADO DE PESQUISA "uso do
+solo REAL" em `transform.gold_features`): `pct_natural`/`pct_agropecuaria`/
+`pct_urbano_industrial`/`pct_agua` (percentual de área por macro-categoria, MapBiomas real,
+1985-2023 com preenchimento limitado nas bordas) entram como preditora, em `PREDITORAS_NUMERICAS_ANUAL`
+E em `PREDITORAS_DRIVERS_ANUAL` — ao contrário de vazão/chuva, uso do solo é exatamente o tipo
+de driver "causal-adjacente" que a matriz de drivers (item 8 abaixo) existe para isolar: não é
+lag do próprio alvo, e mudança de uso do solo é uma alavanca de política real (diferente de
+vazão/chuva, que ninguém "decide"). `pct_nao_vegetado_outro`/`pct_nao_observado` (categorias
+catch-all/ruído de classificação do MapBiomas) ficam de fora de propósito — ver
+`transform.gold_features.COLUNAS_USO_SOLO`.
+
 ACHADO DE AUDITORIA DE ML (item 8 — SHAP dominado por autocorrelação):
 mesmo sem o vazamento mensal (item 1), `{alvo}_lag1a` domina o SHAP dos
 modelos por ser, genuinamente, a feature mais forte numa série com
@@ -84,6 +95,10 @@ PREDITORAS_NUMERICAS_ANUAL = [
     "ano",
     "vazao_m3s_medio",
     "chuva_mm_media",
+    "pct_natural",
+    "pct_agropecuaria",
+    "pct_urbano_industrial",
+    "pct_agua",
     "iqa_lag1a",
     "iqa_lag2a",
     "iqa_lag3a",
@@ -137,7 +152,10 @@ def montar_matriz_features_anual_por_trecho(gold_df: pd.DataFrame, alvo: str, tr
 
 
 # --- Preditoras "drivers" (sem lags do próprio alvo) — item 8, ver docstring do módulo -----
-PREDITORAS_DRIVERS_ANUAL = ["ano", "vazao_m3s_medio", "chuva_mm_media"]
+PREDITORAS_DRIVERS_ANUAL = [
+    "ano", "vazao_m3s_medio", "chuva_mm_media",
+    "pct_natural", "pct_agropecuaria", "pct_urbano_industrial", "pct_agua",
+]
 
 
 def preditoras_drivers_do_trecho(trecho_id: str) -> list[str]:
