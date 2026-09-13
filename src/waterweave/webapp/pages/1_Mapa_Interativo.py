@@ -101,7 +101,11 @@ estacoes_filtradas = estacoes[estacoes["trecho_id"].isin(selecionados)]
 
 centro_lat = estacoes_filtradas["latitude"].mean() if not estacoes_filtradas.empty else -22.9
 centro_lon = estacoes_filtradas["longitude"].mean() if not estacoes_filtradas.empty else -47.5
-mapa = folium.Map(location=[centro_lat, centro_lon], zoom_start=7, tiles="cartodbpositron")
+# ACHADO (2026-09): "cartodbpositron" passou a exigir conta/chave da CARTO para o tile
+# gratuito anônimo — sem ela, o Leaflet renderiza um watermark "API KEY REQUIRED" cobrindo o
+# mapa inteiro (nenhum erro Python, só o tile de fundo quebrado). "OpenStreetMap" continua
+# gratuito e sem chave.
+mapa = folium.Map(location=[centro_lat, centro_lon], zoom_start=7, tiles="OpenStreetMap")
 
 for _, estacao in estacoes_filtradas.iterrows():
     cor = theme.TRECHO_COLOR[estacao["trecho_id"]]
