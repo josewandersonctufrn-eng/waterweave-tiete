@@ -223,7 +223,7 @@ def gerar_relatorio_trecho_completo(qualidade: pd.DataFrame, trecho_id: str, ano
         objetivo_geral=i18n.t("rel.b.objetivo_geral_texto", trecho=ind.nome_trecho, ano=ano),
         objetivos_especificos=i18n.t("rel.b.objetivos_especificos_itens"),
         metodologia_intro=i18n.t("rel.b.metodologia_intro"),
-        metodologia_corpo=i18n.t("cn.nota"),
+        metodologia_corpo=i18n.t("rel.b.metodologia_corpo"),
         desenvolvimento_intro=i18n.t("rel.b.desenvolvimento_intro", trecho=ind.nome_trecho, ano=ano),
         desenvolvimento=[par_iqa, par_od_dbo],
         resultados_discussao=resultados_discussao,

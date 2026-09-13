@@ -60,6 +60,7 @@ def _emoji_para_texto() -> dict[str, str]:
 _TIPOGRAFIA_PARA_LATIN1 = {
     "—": "-",
     "–": "-",
+    "−": "-",  # sinal de menos matemático (U+2212, ex.: em fórmulas) -- ausente do Latin-1
     "…": "...",
     "‘": "'",
     "’": "'",
@@ -321,12 +322,21 @@ def gerar_relatorio_todos_trechos_pdf_resumido(qualidade, ano: int) -> bytes:
     return bytes(pdf.output())
 
 
-def _renderizar_documento_completo_inicio(pdf: FPDF, titulo: str, local_valor: str, objetivo_geral: str, resumo: str, palavras_chave: str) -> None:
+def _renderizar_documento_completo_inicio(
+    pdf: FPDF, titulo: str, local_valor: str, objetivo_geral: str, resumo: str, palavras_chave: str, natureza_texto: str
+) -> None:
     """Elementos pré-textuais comuns ao Modelo Completo (Opção B): capa, folha de rosto,
     resumo+palavras-chave e sumário (via `insert_toc_placeholder`) — reaproveitado pelos 3
-    relatórios que usam este modelo (trecho, todos os trechos, cenário)."""
+    relatórios que usam este modelo (trecho, todos os trechos, cenário).
+
+    ACHADO (2026-09): `natureza_texto` era antes fixo em `cn.b.folha_rosto.natureza_texto`
+    ("Relatório técnico-científico gerado por simulação computacional") dentro de
+    `_renderizar_folha_rosto`, correto só para o relatório de Cenário (ABM real) — o Relatório
+    Automático (trecho/todos os trechos) usa medição REAL da CETESB, não uma simulação, e
+    exibia essa frase incorretamente. Agora cada chamador passa o texto certo para o que de
+    fato gera."""
     _renderizar_capa(pdf, titulo, local_valor)
-    _renderizar_folha_rosto(pdf, titulo, objetivo_geral)
+    _renderizar_folha_rosto(pdf, titulo, objetivo_geral, natureza_texto)
     _renderizar_resumo(pdf, resumo, palavras_chave)
     # `insert_toc_placeholder(pages=1)` já reserva a página atual para o Sumário e realiza,
     # internamente, o(s) page-break(s) necessário(s) — um `pdf.add_page()` extra aqui criaria
@@ -353,7 +363,10 @@ def gerar_relatorio_trecho_pdf_completo(qualidade, trecho_id: str, ano: int) -> 
 
     local_valor = f"{i18n.t('pdf.a.local_prefixo')} — {nome_trecho}"
     pdf = _novo_pdf(titulo)
-    _renderizar_documento_completo_inicio(pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave)
+    _renderizar_documento_completo_inicio(
+        pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave,
+        i18n.t("rel.b.natureza_texto"),
+    )
 
     pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
     _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))
@@ -417,7 +430,10 @@ def gerar_relatorio_todos_trechos_pdf_completo(qualidade, ano: int) -> bytes:
     objetivo_geral = i18n.t("rel.b.objetivo_geral_texto_todos", ano=ano)
 
     pdf = _novo_pdf(titulo)
-    _renderizar_documento_completo_inicio(pdf, titulo, i18n.t("pdf.a.local_prefixo"), objetivo_geral, resumo, i18n.t("rel.b.palavras_chave_lista"))
+    _renderizar_documento_completo_inicio(
+        pdf, titulo, i18n.t("pdf.a.local_prefixo"), objetivo_geral, resumo, i18n.t("rel.b.palavras_chave_lista"),
+        i18n.t("rel.b.natureza_texto"),
+    )
 
     pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
     _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))
@@ -621,9 +637,13 @@ def _renderizar_capa(pdf: FPDF, titulo: str, local_valor: str) -> None:
         pdf.ln(0)
 
 
-def _renderizar_folha_rosto(pdf: FPDF, titulo: str, objetivo_texto: str) -> None:
+def _renderizar_folha_rosto(pdf: FPDF, titulo: str, objetivo_texto: str, natureza_texto: str) -> None:
     """Folha de rosto (elemento pré-textual): informações institucionais, natureza do
-    trabalho e objetivo do relatório."""
+    trabalho e objetivo do relatório. `natureza_texto` é passado pelo chamador (não fixo em
+    `cn.b.folha_rosto.natureza_texto`) — ver ACHADO na docstring de
+    `_renderizar_documento_completo_inicio`: essa chave descreve "simulação computacional"
+    (ABM), correta só para o relatório de Cenário, não para o Relatório Automático (dado real
+    da CETESB + fallback simulado)."""
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 13)
     pdf.multi_cell(0, 7, _para_latin1_seguro(titulo), align="C")
@@ -631,7 +651,7 @@ def _renderizar_folha_rosto(pdf: FPDF, titulo: str, objetivo_texto: str) -> None
     pdf.set_font("Helvetica", size=_TAMANHO_CORPO)
     for rotulo, valor in (
         (i18n.t("cn.b.folha_rosto.instituicao_label"), i18n.t("pdf.a.autor_valor")),
-        (i18n.t("cn.b.folha_rosto.natureza_label"), i18n.t("cn.b.folha_rosto.natureza_texto")),
+        (i18n.t("cn.b.folha_rosto.natureza_label"), natureza_texto),
         (i18n.t("cn.b.folha_rosto.objetivo_label"), objetivo_texto),
     ):
         _rotulo_negrito(pdf, rotulo)
@@ -730,7 +750,10 @@ def gerar_relatorio_cenario_pdf_completo(
     local_valor = f"{i18n.t('pdf.a.local_prefixo')} — {trecho_nome}"
 
     pdf = _novo_pdf(titulo)
-    _renderizar_documento_completo_inicio(pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave)
+    _renderizar_documento_completo_inicio(
+        pdf, titulo, local_valor, narrativa.objetivo_geral, narrativa.resumo, narrativa.palavras_chave,
+        i18n.t("cn.b.folha_rosto.natureza_texto"),
+    )
 
     pdf.start_section(i18n.t("cn.b.sec.introducao"), level=0)
     _titulo_secao(pdf, 1, i18n.t("cn.b.sec.introducao"))
