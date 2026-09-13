@@ -85,9 +85,13 @@ def ordem_hidrologica(trechos: list[str]) -> list[str]:
 # não o trecho inteiro. Valores aproximados, sem calibração de campo.
 DISTANCIA_REFERENCIA_KM = {"alto_tiete": 25.0, "medio_tiete": 35.0, "baixo_tiete": 45.0}
 
-IQA_PESO_OD = 20.0
-IQA_PESO_DBO = 2.0
-IQA_OFFSET = 40.0
+# Mesmas referências de `transform.silver_qualidade_cetesb.build_silver_qualidade_cetesb`
+# (OD/8mg/L, DBO/10mg/L — limite CONAMA 357/2005 Classe 3, pesos 0,6/0,4): ver ACHADO na
+# docstring de `iqa_proxy` abaixo para o porquê de reaproveitar a fórmula do dado REAL aqui.
+IQA_OD_REFERENCIA_MG_L = 8.0
+IQA_DBO_REFERENCIA_MG_L = 10.0
+IQA_PESO_OD = 0.6
+IQA_PESO_DBO = 0.4
 
 # Fração da carga poluidora total observada atribuída a fontes industriais
 # (pontuais) vs. difusas agrícolas — a Gold não desagrega por fonte, então
@@ -98,15 +102,30 @@ FRACAO_CARGA_DIFUSA = 0.4
 
 
 def iqa_proxy(od_mg_l: float, dbo_mg_l: float) -> float:
-    """Proxy simplificado de IQA a partir de OD/DBO.
+    """Proxy simplificado de IQA a partir de OD/DBO — MESMA fórmula usada para o dado REAL em
+    `transform.silver_qualidade_cetesb.build_silver_qualidade_cetesb` (ver docstring lá para o
+    racional dos limiares OD/8mg/L e DBO/10mg/L), para o ABM e o IQA "real" do projeto falarem
+    a mesma língua em vez de duas fórmulas divergentes para o mesmo conceito.
+
+    ACHADO (2026-09, página "Comparativo de Cenários" sempre mostrando IQA = 100,00 para todo
+    trecho/cenário/horizonte): a fórmula anterior aqui (`20×OD − 2×DBO + 40`, sem relação com a
+    de `silver_qualidade_cetesb`) saturava em 100 para praticamente qualquer OD/DBO alcançável
+    pelo modelo — OD nunca passa de `qualidade_agua.OD_SATURACAO_MG_L` (≈9,08 mg/L via
+    Streeter-Phelps), o que já dá `20×9,08+40 = 221,6`; só uma DBO > ~60 mg/L (bem acima do que
+    qualquer cenário simulado produzia, tipicamente 0-18 mg/L) evitaria o teto. Resultado: a
+    tabela comparativa não distinguia nenhum cenário, trecho ou horizonte temporal — o oposto
+    do propósito da página. Corrigido reaproveitando a fórmula real (referência de OD bem mais
+    baixa, 8 mg/L, e 40% do peso na DBO), que de fato varia dentro do range 0-100 alcançável
+    pelo balanço hídrico + Streeter-Phelps deste módulo (ver testes em
+    `tests/test_hybrid_bridge_conectividade.py`).
 
     NÃO é o IQA oficial (NSF/CETESB, que pondera 9 parâmetros: OD,
     coliformes, pH, DBO, temperatura, nitrogênio, fósforo, turbidez,
-    sólidos totais) — serve apenas para o ABM ter um indicador rápido e
-    monotônico na direção certa (sobe com OD, desce com DBO).
+    sólidos totais).
     """
-    valor = IQA_PESO_OD * od_mg_l - IQA_PESO_DBO * dbo_mg_l + IQA_OFFSET
-    return max(0.0, min(100.0, valor))
+    od_normalizado = max(0.0, min(100.0, (od_mg_l / IQA_OD_REFERENCIA_MG_L) * 100.0))
+    dbo_normalizado = max(0.0, min(100.0, 100.0 - (dbo_mg_l / IQA_DBO_REFERENCIA_MG_L) * 100.0))
+    return IQA_PESO_OD * od_normalizado + IQA_PESO_DBO * dbo_normalizado
 
 
 @dataclass
