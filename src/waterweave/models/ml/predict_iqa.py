@@ -29,6 +29,16 @@ inconsistência estrutural documentada), e o modelo salvo para esse trecho
 literalmente não foi treinado com essa coluna — passá-la mesmo assim faz o
 `RandomForestRegressor` rejeitar a previsão (`ValueError: feature names
 should match`).
+
+CORREÇÃO (2026-09): quando o uso do solo real (MapBiomas) entrou como preditora de produção
+(`pct_natural`/`pct_agropecuaria`/`pct_urbano_industrial`/`pct_agua`, ver ACHADO DE PESQUISA
+"uso do solo REAL" em `transform.gold_features`), este módulo não foi atualizado — `valores`
+nunca populava essas 4 colunas, e `preditoras_anuais_do_trecho` já as inclui há meses, gerando
+`KeyError` toda vez que `prever_iqa` era chamado (ex.: página "Cenários Futuros" do dashboard,
+via `models.ml.comparacao_biofisico_ml`). Corrigido preenchendo as 4 colunas com o último valor
+real/imputado conhecido do trecho (uso do solo muda devagar — não há "safra" ou "estação" de
+uso do solo — mantê-lo fixo no horizonte de previsão é a mesma lógica já documentada em
+`_LIMITE_PREENCHIMENTO_USO_SOLO_ANOS`, só que projetada para a frente em vez de para trás).
 """
 from __future__ import annotations
 
@@ -39,6 +49,7 @@ from waterweave.config import GOLD_DIR
 from waterweave.io_delta import read_table
 from waterweave.models.ml.features import preditoras_anuais_do_trecho
 from waterweave.models.ml.train import MODELOS_DIR
+from waterweave.transform.gold_features import COLUNAS_USO_SOLO
 
 _JANELA_LAGS = 5
 _JANELA_CLIMATOLOGIA_ANOS = 10
@@ -75,6 +86,20 @@ def prever_iqa(trecho_id: str, horizonte_anos: int) -> pd.DataFrame:
     chuva_media = recente["chuva_mm_media"].mean()
     vazao_media = recente["vazao_m3s_medio"].mean() if "vazao_m3s_medio" in preditoras else None
 
+    # Uso do solo: mantido fixo no último valor real/imputado conhecido do trecho (ver
+    # CORREÇÃO 2026-09 na docstring do módulo) — não há cenário de uso do solo futuro no
+    # horizonte desta previsão estatística.
+    colunas_uso_solo_presentes = [c for c in COLUNAS_USO_SOLO if c in historico.columns]
+    recente_uso_solo = historico.dropna(subset=colunas_uso_solo_presentes, how="all").tail(1)
+    uso_solo_atual = {
+        coluna: (
+            float(recente_uso_solo[coluna].iloc[0])
+            if not recente_uso_solo.empty and pd.notna(recente_uso_solo[coluna].iloc[0])
+            else None
+        )
+        for coluna in COLUNAS_USO_SOLO
+    }
+
     janela_iqa = list(historico["iqa"].dropna())[-_JANELA_LAGS:]
     janela_od = list(historico["od_mg_l"].dropna())[-_JANELA_LAGS:]
     ultimo_ano = int(historico["ano"].max())
@@ -87,6 +112,7 @@ def prever_iqa(trecho_id: str, horizonte_anos: int) -> pd.DataFrame:
             "ano": ano_previsto,
             "vazao_m3s_medio": vazao_media,
             "chuva_mm_media": chuva_media,
+            **uso_solo_atual,
             "iqa_lag1a": _lag(janela_iqa, 1),
             "iqa_lag2a": _lag(janela_iqa, 2),
             "iqa_lag3a": _lag(janela_iqa, 3),
