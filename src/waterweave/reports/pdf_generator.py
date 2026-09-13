@@ -447,7 +447,7 @@ def gerar_relatorio_todos_trechos_pdf_completo(qualidade, ano: int) -> bytes:
     pdf.start_section(i18n.t("cn.b.sec.metodologia"), level=0)
     _titulo_secao(pdf, 2, i18n.t("cn.b.sec.metodologia"))
     _paragrafo(pdf, i18n.t("rel.b.metodologia_intro"))
-    _paragrafo(pdf, i18n.t("cn.nota"))
+    _paragrafo(pdf, i18n.t("rel.b.metodologia_corpo"))
 
     _garantir_espaco(pdf, 25)
     pdf.start_section(i18n.t("cn.b.sec.desenvolvimento"), level=0)

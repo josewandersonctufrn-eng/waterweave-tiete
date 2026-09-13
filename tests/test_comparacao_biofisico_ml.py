@@ -34,8 +34,10 @@ def _historico_biofisico_falso(parametros: dict, trechos: list[str], horizonte_m
                 "mes_data": pd.Timestamp("2026-01-01") + pd.DateOffset(months=mes_idx),
                 "ano_relativo": ano_relativo,
                 # IQA biofísico deliberadamente BEM diferente do ML no ano 2 (ano_relativo=2),
-                # para exercitar a flag `divergem`.
-                "iqa": {1: 68.0, 2: 20.0, 3: 55.0}[ano_relativo],
+                # para exercitar a flag `divergem`. Coluna "iqa_proxy_od_dbo" (não "iqa"): a
+                # comparação usa o proxy de 2 parâmetros, mesma escala do IQA usado para
+                # treinar o ML — ver ACHADO em comparacao_biofisico_ml.py (2026-09).
+                "iqa_proxy_od_dbo": {1: 68.0, 2: 20.0, 3: 55.0}[ano_relativo],
             }
         )
     return pd.DataFrame(linhas)

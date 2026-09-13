@@ -42,6 +42,16 @@ from waterweave.models.ml.predict_iqa import prever_iqa
 # (`models.hybrid_bridge.iqa_proxy`, que não é o IQA oficial NSF/CETESB).
 LIMIAR_DIVERGENCIA_IQA = 15.0
 
+# ACHADO (2026-09): `rodar_cenario_customizado` passou a expor DOIS IQAs na coluna "iqa"
+# (modelo oficial CETESB/NSF, 9 parâmetros — trocado a pedido do usuário para a página
+# "Cenários Futuros") e "iqa_proxy_od_dbo" (proxy de 2 parâmetros, valor anterior da coluna
+# "iqa"). O IQA real usado para treinar `models.ml.predict_iqa` vem de
+# `transform.silver_qualidade_cetesb` (o MESMO proxy de 2 parâmetros, não o oficial de 9) — por
+# isso esta comparação precisa usar "iqa_proxy_od_dbo", não "iqa", para os dois lados ficarem na
+# mesma escala/definição. Comparar contra o oficial de 9 parâmetros aqui inflaria
+# `diferenca_abs_iqa` só por mudança de fórmula, não por desacordo real entre os modelos.
+_COLUNA_IQA_BIOFISICO_COMPARAVEL = "iqa_proxy_od_dbo"
+
 
 def comparar_ml_vs_biofisico(trecho_id: str, horizonte_anos: int, cenario_biofisico: str = "atual") -> pd.DataFrame:
     """Roda os dois modelos para o mesmo trecho/horizonte e retorna uma linha por PASSO (1..N,
@@ -61,7 +71,10 @@ def comparar_ml_vs_biofisico(trecho_id: str, horizonte_anos: int, cenario_biofis
     historico_biofisico = rodar_cenario_customizado(parametros, [trecho_id], horizonte_anos * 12)
     anual_biofisico = (
         historico_biofisico.groupby("ano_relativo", as_index=False)
-        .agg(iqa_biofisico=("iqa", "mean"), ano_civil_biofisico=("mes_data", lambda s: pd.Timestamp(s.iloc[-1]).year))
+        .agg(
+            iqa_biofisico=(_COLUNA_IQA_BIOFISICO_COMPARAVEL, "mean"),
+            ano_civil_biofisico=("mes_data", lambda s: pd.Timestamp(s.iloc[-1]).year),
+        )
         .rename(columns={"ano_relativo": "passo"})
     )
 

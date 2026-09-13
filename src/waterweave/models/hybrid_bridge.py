@@ -61,7 +61,7 @@ import pandas as pd
 
 from waterweave.config import GOLD_DIR, TRECHOS
 from waterweave.io_delta import read_table
-from waterweave.models.biofisico import balanco_hidrico, parametros_estendidos, qualidade_agua
+from waterweave.models.biofisico import balanco_hidrico, iqa_oficial_cetesb, parametros_estendidos, qualidade_agua
 from waterweave.transform.gold_features import COLUNAS_USO_SOLO
 
 # Fração do DESVIO de carga poluidora (em relação à carga-base histórica do trecho de
@@ -149,6 +149,12 @@ class PassoHibrido:
     od_simulado_mg_l: float
     dbo_simulado_mg_l: float
     iqa_simulado: float
+    # IQA pelo modelo OFICIAL CETESB/NSF (9 parâmetros, produtório ponderado) — ver
+    # `models.biofisico.iqa_oficial_cetesb` para a fórmula e a proveniência de cada curva.
+    # Achado de pesquisa (2026-09, pedido do usuário para a página "Cenários Futuros"):
+    # diferente de `iqa_simulado` (proxy de 2 parâmetros OD/DBO, usado no restante do ABM/
+    # Comparativo de Cenários), este campo usa os 9 parâmetros já simulados neste mesmo passo.
+    iqa_oficial_cetesb: float
     turbidez_ntu: float
     solidos_totais_mg_l: float
     temperatura_c: float
@@ -300,6 +306,17 @@ def executar_passo(
         carga_base_ecoli_kg_dia=carga_base_ecoli_kg_dia(trecho_id),
     )
 
+    iqa_cetesb = iqa_oficial_cetesb.iqa_oficial_cetesb(
+        od_mg_l=od,
+        dbo_mg_l=dbo,
+        coliformes_termotolerantes_nmp_100ml=estendidos.e_coli_nmp_100ml,
+        ph=estendidos.ph,
+        nitrogenio_total_mg_l=estendidos.nitrogenio_mg_l,
+        fosforo_total_mg_l=estendidos.fosforo_mg_l,
+        turbidez_ntu=estendidos.turbidez_ntu,
+        solidos_totais_mg_l=estendidos.solidos_totais_mg_l,
+    )
+
     return PassoHibrido(
         trecho_id=trecho_id,
         mes_data=mes_data,
@@ -309,6 +326,7 @@ def executar_passo(
         od_simulado_mg_l=od,
         dbo_simulado_mg_l=dbo,
         iqa_simulado=iqa,
+        iqa_oficial_cetesb=iqa_cetesb,
         turbidez_ntu=estendidos.turbidez_ntu,
         solidos_totais_mg_l=estendidos.solidos_totais_mg_l,
         temperatura_c=estendidos.temperatura_c,

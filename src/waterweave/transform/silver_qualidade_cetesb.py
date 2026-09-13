@@ -22,9 +22,14 @@ Limitações desta primeira versão (documentadas, não escondidas):
     de `silver.qualidade` continua sendo a única fonte disponível.
   - `iqa` é um proxy simplificado a partir de OD/DBO reais — MESMA
     simplificação já documentada no projeto (`webapp/i18n.py`, chaves
-    `cn.nota`/`rel.nota_proveniencia`: "IQA é um proxy simplificado de
-    OD/DBO, não o índice oficial CETESB de 9 parâmetros"), agora alimentada
-    por medições reais em vez de série simulada.
+    `rel.b.metodologia_corpo`/`rel.nota_proveniencia`: "o IQA é um proxy
+    simplificado de OD/DBO, não o índice oficial CETESB de 9 parâmetros"),
+    agora alimentada por medições reais em vez de série simulada. NÃO
+    confundir com `models.biofisico.iqa_oficial_cetesb` (o modelo OFICIAL
+    de 9 parâmetros, usado só pela página "Cenários Futuros" via
+    `models.hybrid_bridge.PassoHibrido.iqa_oficial_cetesb`) — os dois
+    convivem no projeto para propósitos diferentes, ver ACHADO em
+    `models.biofisico.iqa_oficial_cetesb`.
 """
 from __future__ import annotations
 

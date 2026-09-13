@@ -106,6 +106,12 @@ def rodar_cenario_customizado(
     via sliders em vez de escolher entre os 3 cenários fixos de
     `CENARIOS`/`PARAMETROS_CENARIO` — `rodar_cenario` continua servindo
     exclusivamente `3_Comparativo_Cenarios.py`.
+
+    ACHADO (2026-09, pedido do usuário): a coluna "iqa" retornada aqui usa o modelo OFICIAL da
+    CETESB/NSF (`models.biofisico.iqa_oficial_cetesb`, 9 parâmetros, produtório ponderado),
+    não o proxy simplificado de 2 parâmetros (OD/DBO) usado em `rodar_cenario`/Comparativo de
+    Cenários — pedido específico para esta página. O proxy continua disponível na coluna
+    "iqa_proxy_od_dbo", para quem precisar comparar os dois.
     """
     modelo = RioTieteModel(trechos, seed=seed, **parametros_modelo)
     modelo.run_horizonte(horizonte_meses)
@@ -116,7 +122,8 @@ def rodar_cenario_customizado(
             "mes_data": passo.mes_data,
             "ano_relativo": i // (12 * len(trechos)) + 1,
             "vazao_m3s_medio": passo.vazao_simulada_m3s,
-            "iqa": passo.iqa_simulado,
+            "iqa": passo.iqa_oficial_cetesb,
+            "iqa_proxy_od_dbo": passo.iqa_simulado,
             "od_mg_l": passo.od_simulado_mg_l,
             "dbo_mg_l": passo.dbo_simulado_mg_l,
             "turbidez_ntu": passo.turbidez_ntu,
